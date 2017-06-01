@@ -1,6 +1,6 @@
 {
   "name": "kentico-cloud-js-test",
-  "version": "0.0.1",
+  "version": "1.0.1",
   "author": "richard sustek",
   "description": "Kentico Cloud Sample Javascript app",
   "keywords": [
@@ -9,7 +9,7 @@
     "Kentico Cloud Javascript"
   ],
   "license": "MIT",
-  "private": true,
+  "private": false,
   "dependencies": {
     "http-server": "^0.10.0",
     "kentico-cloud-angular2-sdk": "^0.10.3"
