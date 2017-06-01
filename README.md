@@ -37,7 +37,7 @@ In order to use `Kentico Cloud SDK` you need to first prepare it for usage in br
 browserify cloud-api.js -o bundle.js
 ```
 
-Note: If you don't see changes after refreshing your browser, use CTRL+F5 to flush the browser's cache
+Note: If you don't see changes after refreshing your browser, use **CTRL+F5** to flush the browser's cache
 
 
 
