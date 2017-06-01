@@ -1,6 +1,6 @@
 # Kentico Cloud Sample Javascript application
 
-This package uses 'KenticoCloudSDK(TODO: add link to NPM package) to showcase how it can be used in `Javascript` applications
+This package uses `Kentico Cloud Delivery TypeScript SDK` to showcase how it can be used in `Javascript` applications
 
 [![npm version](https://badge.fury.io/js/kentico-cloud-sample-javascript-app.svg)](https://www.npmjs.com/package/kentico-cloud-sample-javascript-app)
 
