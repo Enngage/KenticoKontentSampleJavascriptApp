@@ -2,7 +2,7 @@
 
 This package uses 'KenticoCloudSDK(TODO: add link to NPM package) to showcase how it can be used in `Javascript` applications
 
-[![npm version](https://badge.fury.io/js/kentico-cloud-angular2-sdk.svg)](https://www.npmjs.com/package/kentico-cloud-angular2-sdk)
+[![npm version](https://badge.fury.io/js/kentico-cloud-sample-javascript-app.svg)](https://www.npmjs.com/package/kentico-cloud-sample-javascript-app)
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ This package uses 'KenticoCloudSDK(TODO: add link to NPM package) to showcase ho
 ### Install package
 
 ```
-npm install package-name(todo)
+npm i kentico-cloud-sample-javascript-app --save
 ```
 
 ### Run it
