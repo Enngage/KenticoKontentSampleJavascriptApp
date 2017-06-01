@@ -16,7 +16,7 @@ This package uses `Kentico Cloud Delivery TypeScript SDK` to showcase how it can
 ### Install package
 
 ```
-npm i kentico-cloud-sample-javascript-app --save
+npm i kentico-cloud-sample-javascript-app
 ```
 
 ### Run it
