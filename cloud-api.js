@@ -1,10 +1,17 @@
-var cloud = require('kentico-cloud-delivery-typescript-sdk');
+var kc = require('kentico-cloud-delivery-typescript-sdk');
 
 var apiUrl = 'https://deliver.kenticocloud.com';
 var projectId = 'da5abe9f-fdad-4168-97cd-b3464be2ccb9';
 
 // no properties are necessary
-class Movie extends cloud.ContentItem{
+class Movie extends kc.ContentItem {
+    constructor() {
+        super({
+            urlSlugResolver: (item, urlSlug) => {
+                return 'someurl/movie/' + urlSlug;
+            }
+        })
+    }
 
     getCategoriesText() {
         if (!this.category) {
@@ -22,8 +29,7 @@ class Movie extends cloud.ContentItem{
     }
 }
 
-class Actor extends cloud.ContentItem{
-
+class Actor extends kc.ContentItem {
     constructor() {
         super({
             resolver: (fieldName) => {
@@ -33,31 +39,39 @@ class Actor extends cloud.ContentItem{
                 if (fieldName === 'last_name') {
                     return 'lastName';
                 }
+            },
+            urlSlugResolver: (item, urlSlug) => {
+                return 'someurl/actor/' + urlSlug;
             }
         })
     }
 }
 
-
 // configure type resolvers
 var typeResolvers = [
-    new cloud.TypeResolver("movie", () => new Movie()),
-    new cloud.TypeResolver("actor", () => new Actor()),
+    new kc.TypeResolver('movie', () => new Movie()),
+    new kc.TypeResolver('actor', () => new Actor()),
 ];
 
-var config = new cloud.DeliveryClientConfig(projectId, typeResolvers)
+var config = new kc.DeliveryClientConfig(projectId, typeResolvers)
 
 // instantiate delivery client
-var deliveryClient = new cloud.DeliveryClient(config);
+var deliveryClient = new kc.DeliveryClient(config);
 
 // use it
-deliveryClient.getItems(null,
-    [
-        new cloud.LimitParameter(5)
-    ])
+deliveryClient.items()
+    .limitParameter(10)
+    .orderParameter('system.codename', kc.SortOrder.desc)
+    .depthParameter(5)
+    .get()
     .subscribe(response => console.log(response));
 
-deliveryClient.getItem("actor", "tom_hardy").subscribe(response => console.log(response));
+deliveryClient.item('tom_hardy')
+    .get()
+    .subscribe(response => console.log(response));
 
-deliveryClient.getItems("movie").subscribe(response => console.log(response));
+deliveryClient.items()
+    .type('movie')
+    .get()
+    .subscribe(response => console.log(response));
 

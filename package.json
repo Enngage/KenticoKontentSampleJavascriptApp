@@ -15,7 +15,8 @@
   "private": true,
   "dependencies": {
     "http-server": "^0.10.0",
-    "kentico-cloud-delivery-typescript-sdk": "1.0.18"
+    "kentico-cloud-delivery-typescript-sdk": "^1.2.3",
+    "opn": "5.1.0"
   },
   "devDependencies": {}
 }
