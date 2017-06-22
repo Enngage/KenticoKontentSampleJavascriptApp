@@ -32,7 +32,7 @@ class Movie extends kc.ContentItem {
 class Actor extends kc.ContentItem {
     constructor() {
         super({
-            resolver: (fieldName) => {
+            propertyResolver: (fieldName) => {
                 if (fieldName === 'first_name') {
                     return 'firstName'; // binds 'first_name' response from Kentico cloud to 'firstName' property
                 }
