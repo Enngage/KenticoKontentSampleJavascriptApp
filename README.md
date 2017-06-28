@@ -1,27 +1,34 @@
 # Kentico Cloud Sample Javascript application
 
-This package uses `Kentico Cloud Delivery TypeScript SDK` to showcase how it can be used in `Javascript` applications
+This sample application uses the [Kentico Cloud Delivery TypeScript SDK](https://github.com/Enngage/KenticoCloudDeliveryTypeScriptSDK) to showcase how you can use the SDK in Javascript applications.
+
+## Prerequisites
+
+- NodeJS 
+- NPM > 3
+
+## Installation
+
+Clone / download this repository, navigate to the root folder of this package and install node packages:
+
+```
+npm i
+```
 
 ### Run application
 
-Navigate to the root folder of this package with `Node.js command prompt` and use following command:
-
 ```
-node start
+npm start
 ```
 
 Your browser will open `http://localhost:99/`
 
 ### Making changes
 
-In order to use `Kentico Cloud SDK` you need to first prepare it for usage in browser. For this you need to compile `cloud-api.js` with `browserify`:
+To use the Typescript SDK for Kentico Cloud you first need to prepare it for usage in your browser. For this you need to compile `cloud-api.js` with `browserify`:
 
 ```
 browserify cloud-api.js -o bundle.js
 ```
 
-Note: If you don't see changes after refreshing your browser, use **CTRL+F5** to flush the browser's cache
-
-
-
-
+Note: If you don't see any changes after refreshing your browser, use **CTRL + F5** to flush the browser's cache.
