@@ -1,6 +1,6 @@
 {
   "name": "kentico-cloud-sample-javascript-app",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": "richard sustek",
   "description": "Kentico Cloud Sample Javascript app",
   "keywords": [
@@ -15,7 +15,7 @@
   "private": true,
   "dependencies": {
     "http-server": "^0.10.0",
-    "kentico-cloud-delivery-typescript-sdk": "^1.2.3",
+    "kentico-cloud-delivery-typescript-sdk": "^1.4.0",
     "opn": "5.1.0"
   },
   "devDependencies": {}

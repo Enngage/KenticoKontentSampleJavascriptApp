@@ -2,32 +2,26 @@
 
 This sample application uses the [Kentico Cloud Delivery TypeScript SDK](https://github.com/Enngage/KenticoCloudDeliveryTypeScriptSDK) to showcase how you can use the SDK in Javascript applications.
 
-[![npm version](https://badge.fury.io/js/kentico-cloud-sample-javascript-app.svg)](https://www.npmjs.com/package/kentico-cloud-sample-javascript-app)
-
 ## Prerequisites
 
-- NodeJS > 8
+- NodeJS 
 - NPM > 3
-- [Browserify](https://www.npmjs.com/package/browserify) 
-- [http-server](https://www.npmjs.com/package/http-server) 
 
-## Getting started
+## Installation
 
-### Install package
+Clone / download this repository, navigate to the root folder of this package and install node packages:
 
 ```
-npm i kentico-cloud-sample-javascript-app
+npm i
 ```
 
-### Run it
-
-Navigate to the root folder of this package with Node.js commant prompt and execute the `app` script:
+### Run application
 
 ```
-node app
+npm start
 ```
 
-Once the server is running, navigate to `http://localhost:99/` in your browser.
+Your browser will open `http://localhost:99/`
 
 ### Making changes
 
