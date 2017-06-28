@@ -1,6 +1,5 @@
 var kc = require('kentico-cloud-delivery-typescript-sdk');
 
-var apiUrl = 'https://deliver.kenticocloud.com';
 var projectId = 'da5abe9f-fdad-4168-97cd-b3464be2ccb9';
 
 // no properties are necessary
@@ -9,8 +8,8 @@ class Movie extends kc.ContentItem {
         super({
             urlSlugResolver: (item, urlSlug) => {
                 return 'someurl/movie/' + urlSlug;
-            }
-        })
+            },
+        });
     }
 
     getCategoriesText() {
@@ -29,21 +28,22 @@ class Movie extends kc.ContentItem {
     }
 }
 
+var actorFieldTranslations = {
+    first_name: 'firstName',
+    last_name: 'lastName',
+};
+
 class Actor extends kc.ContentItem {
     constructor() {
         super({
             propertyResolver: (fieldName) => {
-                if (fieldName === 'first_name') {
-                    return 'firstName'; // binds 'first_name' response from Kentico cloud to 'firstName' property
-                }
-                if (fieldName === 'last_name') {
-                    return 'lastName';
-                }
+                // binds 'first_name' response from Kentico cloud to 'firstName' property
+                return actorFieldTranslations[fieldName] || fieldName;
             },
             urlSlugResolver: (item, urlSlug) => {
                 return 'someurl/actor/' + urlSlug;
-            }
-        })
+            },
+        });
     }
 }
 
@@ -53,7 +53,7 @@ var typeResolvers = [
     new kc.TypeResolver('actor', () => new Actor()),
 ];
 
-var config = new kc.DeliveryClientConfig(projectId, typeResolvers)
+var config = new kc.DeliveryClientConfig(projectId, typeResolvers);
 
 // instantiate delivery client
 var deliveryClient = new kc.DeliveryClient(config);
