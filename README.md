@@ -30,5 +30,9 @@ To use the Typescript SDK for Kentico Cloud you first need to prepare it for usa
 ```
 browserify cloud-api.js -o bundle.js
 ```
+You might need to install browserify like this: 
+```
+npm i browserify -g
+```
 
 Note: If you don't see any changes after refreshing your browser, use **CTRL + F5** to flush the browser's cache.
