@@ -12,13 +12,15 @@
     "Kentico js",
     "Kentico Cloud",
     "Kentico Cloud SDK",
-    "Kentico Cloud Javascript"
+    "Kentico Cloud Javascript",
+    "Kentico Cloud Boilerplate",
+    "Kentico Cloud Example"
   ],
   "license": "MIT",
   "private": true,
   "dependencies": {
-    "http-server": "^0.10.0",
-    "kentico-cloud-delivery-typescript-sdk": "^1.5.0",
+    "http-server": "0.10.0",
+    "kentico-cloud-delivery-typescript-sdk": "2.0.1",
     "opn": "5.1.0"
   },
   "devDependencies": {}
