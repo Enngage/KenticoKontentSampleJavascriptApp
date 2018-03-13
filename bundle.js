@@ -1,2545 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-'use strict'
-
-exports.byteLength = byteLength
-exports.toByteArray = toByteArray
-exports.fromByteArray = fromByteArray
-
-var lookup = []
-var revLookup = []
-var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
-
-var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-for (var i = 0, len = code.length; i < len; ++i) {
-  lookup[i] = code[i]
-  revLookup[code.charCodeAt(i)] = i
-}
-
-revLookup['-'.charCodeAt(0)] = 62
-revLookup['_'.charCodeAt(0)] = 63
-
-function placeHoldersCount (b64) {
-  var len = b64.length
-  if (len % 4 > 0) {
-    throw new Error('Invalid string. Length must be a multiple of 4')
-  }
-
-  // the number of equal signs (place holders)
-  // if there are two placeholders, than the two characters before it
-  // represent one byte
-  // if there is only one, then the three characters before it represent 2 bytes
-  // this is just a cheap hack to not do indexOf twice
-  return b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
-}
-
-function byteLength (b64) {
-  // base64 is 4/3 + up to two characters of the original data
-  return b64.length * 3 / 4 - placeHoldersCount(b64)
-}
-
-function toByteArray (b64) {
-  var i, j, l, tmp, placeHolders, arr
-  var len = b64.length
-  placeHolders = placeHoldersCount(b64)
-
-  arr = new Arr(len * 3 / 4 - placeHolders)
-
-  // if there are placeholders, only get up to the last complete 4 chars
-  l = placeHolders > 0 ? len - 4 : len
-
-  var L = 0
-
-  for (i = 0, j = 0; i < l; i += 4, j += 3) {
-    tmp = (revLookup[b64.charCodeAt(i)] << 18) | (revLookup[b64.charCodeAt(i + 1)] << 12) | (revLookup[b64.charCodeAt(i + 2)] << 6) | revLookup[b64.charCodeAt(i + 3)]
-    arr[L++] = (tmp >> 16) & 0xFF
-    arr[L++] = (tmp >> 8) & 0xFF
-    arr[L++] = tmp & 0xFF
-  }
-
-  if (placeHolders === 2) {
-    tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4)
-    arr[L++] = tmp & 0xFF
-  } else if (placeHolders === 1) {
-    tmp = (revLookup[b64.charCodeAt(i)] << 10) | (revLookup[b64.charCodeAt(i + 1)] << 4) | (revLookup[b64.charCodeAt(i + 2)] >> 2)
-    arr[L++] = (tmp >> 8) & 0xFF
-    arr[L++] = tmp & 0xFF
-  }
-
-  return arr
-}
-
-function tripletToBase64 (num) {
-  return lookup[num >> 18 & 0x3F] + lookup[num >> 12 & 0x3F] + lookup[num >> 6 & 0x3F] + lookup[num & 0x3F]
-}
-
-function encodeChunk (uint8, start, end) {
-  var tmp
-  var output = []
-  for (var i = start; i < end; i += 3) {
-    tmp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
-    output.push(tripletToBase64(tmp))
-  }
-  return output.join('')
-}
-
-function fromByteArray (uint8) {
-  var tmp
-  var len = uint8.length
-  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
-  var output = ''
-  var parts = []
-  var maxChunkLength = 16383 // must be multiple of 3
-
-  // go through the array every three bytes, we'll deal with trailing stuff later
-  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
-    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
-  }
-
-  // pad the end with zeros, but make sure to not forget the extra bytes
-  if (extraBytes === 1) {
-    tmp = uint8[len - 1]
-    output += lookup[tmp >> 2]
-    output += lookup[(tmp << 4) & 0x3F]
-    output += '=='
-  } else if (extraBytes === 2) {
-    tmp = (uint8[len - 2] << 8) + (uint8[len - 1])
-    output += lookup[tmp >> 10]
-    output += lookup[(tmp >> 4) & 0x3F]
-    output += lookup[(tmp << 2) & 0x3F]
-    output += '='
-  }
-
-  parts.push(output)
-
-  return parts.join('')
-}
-
-},{}],2:[function(require,module,exports){
-
-},{}],3:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var buffer = require('buffer');
-var Buffer = buffer.Buffer;
-var SlowBuffer = buffer.SlowBuffer;
-var MAX_LEN = buffer.kMaxLength || 2147483647;
-exports.alloc = function alloc(size, fill, encoding) {
-  if (typeof Buffer.alloc === 'function') {
-    return Buffer.alloc(size, fill, encoding);
-  }
-  if (typeof encoding === 'number') {
-    throw new TypeError('encoding must not be number');
-  }
-  if (typeof size !== 'number') {
-    throw new TypeError('size must be a number');
-  }
-  if (size > MAX_LEN) {
-    throw new RangeError('size is too large');
-  }
-  var enc = encoding;
-  var _fill = fill;
-  if (_fill === undefined) {
-    enc = undefined;
-    _fill = 0;
-  }
-  var buf = new Buffer(size);
-  if (typeof _fill === 'string') {
-    var fillBuf = new Buffer(_fill, enc);
-    var flen = fillBuf.length;
-    var i = -1;
-    while (++i < size) {
-      buf[i] = fillBuf[i % flen];
-    }
-  } else {
-    buf.fill(_fill);
-  }
-  return buf;
-}
-exports.allocUnsafe = function allocUnsafe(size) {
-  if (typeof Buffer.allocUnsafe === 'function') {
-    return Buffer.allocUnsafe(size);
-  }
-  if (typeof size !== 'number') {
-    throw new TypeError('size must be a number');
-  }
-  if (size > MAX_LEN) {
-    throw new RangeError('size is too large');
-  }
-  return new Buffer(size);
-}
-exports.from = function from(value, encodingOrOffset, length) {
-  if (typeof Buffer.from === 'function' && (!global.Uint8Array || Uint8Array.from !== Buffer.from)) {
-    return Buffer.from(value, encodingOrOffset, length);
-  }
-  if (typeof value === 'number') {
-    throw new TypeError('"value" argument must not be a number');
-  }
-  if (typeof value === 'string') {
-    return new Buffer(value, encodingOrOffset);
-  }
-  if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
-    var offset = encodingOrOffset;
-    if (arguments.length === 1) {
-      return new Buffer(value);
-    }
-    if (typeof offset === 'undefined') {
-      offset = 0;
-    }
-    var len = length;
-    if (typeof len === 'undefined') {
-      len = value.byteLength - offset;
-    }
-    if (offset >= value.byteLength) {
-      throw new RangeError('\'offset\' is out of bounds');
-    }
-    if (len > value.byteLength - offset) {
-      throw new RangeError('\'length\' is out of bounds');
-    }
-    return new Buffer(value.slice(offset, offset + len));
-  }
-  if (Buffer.isBuffer(value)) {
-    var out = new Buffer(value.length);
-    value.copy(out, 0, 0, value.length);
-    return out;
-  }
-  if (value) {
-    if (Array.isArray(value) || (typeof ArrayBuffer !== 'undefined' && value.buffer instanceof ArrayBuffer) || 'length' in value) {
-      return new Buffer(value);
-    }
-    if (value.type === 'Buffer' && Array.isArray(value.data)) {
-      return new Buffer(value.data);
-    }
-  }
-
-  throw new TypeError('First argument must be a string, Buffer, ' + 'ArrayBuffer, Array, or array-like object.');
-}
-exports.allocUnsafeSlow = function allocUnsafeSlow(size) {
-  if (typeof Buffer.allocUnsafeSlow === 'function') {
-    return Buffer.allocUnsafeSlow(size);
-  }
-  if (typeof size !== 'number') {
-    throw new TypeError('size must be a number');
-  }
-  if (size >= MAX_LEN) {
-    throw new RangeError('size is too large');
-  }
-  return new SlowBuffer(size);
-}
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"buffer":4}],4:[function(require,module,exports){
-/*!
- * The buffer module from node.js, for the browser.
- *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * @license  MIT
- */
-/* eslint-disable no-proto */
-
-'use strict'
-
-var base64 = require('base64-js')
-var ieee754 = require('ieee754')
-
-exports.Buffer = Buffer
-exports.SlowBuffer = SlowBuffer
-exports.INSPECT_MAX_BYTES = 50
-
-var K_MAX_LENGTH = 0x7fffffff
-exports.kMaxLength = K_MAX_LENGTH
-
-/**
- * If `Buffer.TYPED_ARRAY_SUPPORT`:
- *   === true    Use Uint8Array implementation (fastest)
- *   === false   Print warning and recommend using `buffer` v4.x which has an Object
- *               implementation (most compatible, even IE6)
- *
- * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
- * Opera 11.6+, iOS 4.2+.
- *
- * We report that the browser does not support typed arrays if the are not subclassable
- * using __proto__. Firefox 4-29 lacks support for adding new properties to `Uint8Array`
- * (See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438). IE 10 lacks support
- * for __proto__ and has a buggy typed array implementation.
- */
-Buffer.TYPED_ARRAY_SUPPORT = typedArraySupport()
-
-if (!Buffer.TYPED_ARRAY_SUPPORT && typeof console !== 'undefined' &&
-    typeof console.error === 'function') {
-  console.error(
-    'This browser lacks typed array (Uint8Array) support which is required by ' +
-    '`buffer` v5.x. Use `buffer` v4.x if you require old browser support.'
-  )
-}
-
-function typedArraySupport () {
-  // Can typed array instances can be augmented?
-  try {
-    var arr = new Uint8Array(1)
-    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
-    return arr.foo() === 42
-  } catch (e) {
-    return false
-  }
-}
-
-function createBuffer (length) {
-  if (length > K_MAX_LENGTH) {
-    throw new RangeError('Invalid typed array length')
-  }
-  // Return an augmented `Uint8Array` instance
-  var buf = new Uint8Array(length)
-  buf.__proto__ = Buffer.prototype
-  return buf
-}
-
-/**
- * The Buffer constructor returns instances of `Uint8Array` that have their
- * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
- * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
- * and the `Uint8Array` methods. Square bracket notation works as expected -- it
- * returns a single octet.
- *
- * The `Uint8Array` prototype remains unmodified.
- */
-
-function Buffer (arg, encodingOrOffset, length) {
-  // Common case.
-  if (typeof arg === 'number') {
-    if (typeof encodingOrOffset === 'string') {
-      throw new Error(
-        'If encoding is specified then the first argument must be a string'
-      )
-    }
-    return allocUnsafe(arg)
-  }
-  return from(arg, encodingOrOffset, length)
-}
-
-// Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
-if (typeof Symbol !== 'undefined' && Symbol.species &&
-    Buffer[Symbol.species] === Buffer) {
-  Object.defineProperty(Buffer, Symbol.species, {
-    value: null,
-    configurable: true,
-    enumerable: false,
-    writable: false
-  })
-}
-
-Buffer.poolSize = 8192 // not used by this implementation
-
-function from (value, encodingOrOffset, length) {
-  if (typeof value === 'number') {
-    throw new TypeError('"value" argument must not be a number')
-  }
-
-  if (value instanceof ArrayBuffer) {
-    return fromArrayBuffer(value, encodingOrOffset, length)
-  }
-
-  if (typeof value === 'string') {
-    return fromString(value, encodingOrOffset)
-  }
-
-  return fromObject(value)
-}
-
-/**
- * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
- * if value is a number.
- * Buffer.from(str[, encoding])
- * Buffer.from(array)
- * Buffer.from(buffer)
- * Buffer.from(arrayBuffer[, byteOffset[, length]])
- **/
-Buffer.from = function (value, encodingOrOffset, length) {
-  return from(value, encodingOrOffset, length)
-}
-
-// Note: Change prototype *after* Buffer.from is defined to workaround Chrome bug:
-// https://github.com/feross/buffer/pull/148
-Buffer.prototype.__proto__ = Uint8Array.prototype
-Buffer.__proto__ = Uint8Array
-
-function assertSize (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('"size" argument must be a number')
-  } else if (size < 0) {
-    throw new RangeError('"size" argument must not be negative')
-  }
-}
-
-function alloc (size, fill, encoding) {
-  assertSize(size)
-  if (size <= 0) {
-    return createBuffer(size)
-  }
-  if (fill !== undefined) {
-    // Only pay attention to encoding if it's a string. This
-    // prevents accidentally sending in a number that would
-    // be interpretted as a start offset.
-    return typeof encoding === 'string'
-      ? createBuffer(size).fill(fill, encoding)
-      : createBuffer(size).fill(fill)
-  }
-  return createBuffer(size)
-}
-
-/**
- * Creates a new filled Buffer instance.
- * alloc(size[, fill[, encoding]])
- **/
-Buffer.alloc = function (size, fill, encoding) {
-  return alloc(size, fill, encoding)
-}
-
-function allocUnsafe (size) {
-  assertSize(size)
-  return createBuffer(size < 0 ? 0 : checked(size) | 0)
-}
-
-/**
- * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
- * */
-Buffer.allocUnsafe = function (size) {
-  return allocUnsafe(size)
-}
-/**
- * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
- */
-Buffer.allocUnsafeSlow = function (size) {
-  return allocUnsafe(size)
-}
-
-function fromString (string, encoding) {
-  if (typeof encoding !== 'string' || encoding === '') {
-    encoding = 'utf8'
-  }
-
-  if (!Buffer.isEncoding(encoding)) {
-    throw new TypeError('"encoding" must be a valid string encoding')
-  }
-
-  var length = byteLength(string, encoding) | 0
-  var buf = createBuffer(length)
-
-  var actual = buf.write(string, encoding)
-
-  if (actual !== length) {
-    // Writing a hex string, for example, that contains invalid characters will
-    // cause everything after the first invalid character to be ignored. (e.g.
-    // 'abxxcd' will be treated as 'ab')
-    buf = buf.slice(0, actual)
-  }
-
-  return buf
-}
-
-function fromArrayLike (array) {
-  var length = array.length < 0 ? 0 : checked(array.length) | 0
-  var buf = createBuffer(length)
-  for (var i = 0; i < length; i += 1) {
-    buf[i] = array[i] & 255
-  }
-  return buf
-}
-
-function fromArrayBuffer (array, byteOffset, length) {
-  if (byteOffset < 0 || array.byteLength < byteOffset) {
-    throw new RangeError('\'offset\' is out of bounds')
-  }
-
-  if (array.byteLength < byteOffset + (length || 0)) {
-    throw new RangeError('\'length\' is out of bounds')
-  }
-
-  var buf
-  if (byteOffset === undefined && length === undefined) {
-    buf = new Uint8Array(array)
-  } else if (length === undefined) {
-    buf = new Uint8Array(array, byteOffset)
-  } else {
-    buf = new Uint8Array(array, byteOffset, length)
-  }
-
-  // Return an augmented `Uint8Array` instance
-  buf.__proto__ = Buffer.prototype
-  return buf
-}
-
-function fromObject (obj) {
-  if (Buffer.isBuffer(obj)) {
-    var len = checked(obj.length) | 0
-    var buf = createBuffer(len)
-
-    if (buf.length === 0) {
-      return buf
-    }
-
-    obj.copy(buf, 0, 0, len)
-    return buf
-  }
-
-  if (obj) {
-    if (isArrayBufferView(obj) || 'length' in obj) {
-      if (typeof obj.length !== 'number' || numberIsNaN(obj.length)) {
-        return createBuffer(0)
-      }
-      return fromArrayLike(obj)
-    }
-
-    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
-      return fromArrayLike(obj.data)
-    }
-  }
-
-  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
-}
-
-function checked (length) {
-  // Note: cannot use `length < K_MAX_LENGTH` here because that fails when
-  // length is NaN (which is otherwise coerced to zero.)
-  if (length >= K_MAX_LENGTH) {
-    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
-                         'size: 0x' + K_MAX_LENGTH.toString(16) + ' bytes')
-  }
-  return length | 0
-}
-
-function SlowBuffer (length) {
-  if (+length != length) { // eslint-disable-line eqeqeq
-    length = 0
-  }
-  return Buffer.alloc(+length)
-}
-
-Buffer.isBuffer = function isBuffer (b) {
-  return b != null && b._isBuffer === true
-}
-
-Buffer.compare = function compare (a, b) {
-  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
-    throw new TypeError('Arguments must be Buffers')
-  }
-
-  if (a === b) return 0
-
-  var x = a.length
-  var y = b.length
-
-  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i]
-      y = b[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-Buffer.isEncoding = function isEncoding (encoding) {
-  switch (String(encoding).toLowerCase()) {
-    case 'hex':
-    case 'utf8':
-    case 'utf-8':
-    case 'ascii':
-    case 'latin1':
-    case 'binary':
-    case 'base64':
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      return true
-    default:
-      return false
-  }
-}
-
-Buffer.concat = function concat (list, length) {
-  if (!Array.isArray(list)) {
-    throw new TypeError('"list" argument must be an Array of Buffers')
-  }
-
-  if (list.length === 0) {
-    return Buffer.alloc(0)
-  }
-
-  var i
-  if (length === undefined) {
-    length = 0
-    for (i = 0; i < list.length; ++i) {
-      length += list[i].length
-    }
-  }
-
-  var buffer = Buffer.allocUnsafe(length)
-  var pos = 0
-  for (i = 0; i < list.length; ++i) {
-    var buf = list[i]
-    if (!Buffer.isBuffer(buf)) {
-      throw new TypeError('"list" argument must be an Array of Buffers')
-    }
-    buf.copy(buffer, pos)
-    pos += buf.length
-  }
-  return buffer
-}
-
-function byteLength (string, encoding) {
-  if (Buffer.isBuffer(string)) {
-    return string.length
-  }
-  if (isArrayBufferView(string) || string instanceof ArrayBuffer) {
-    return string.byteLength
-  }
-  if (typeof string !== 'string') {
-    string = '' + string
-  }
-
-  var len = string.length
-  if (len === 0) return 0
-
-  // Use a for loop to avoid recursion
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'ascii':
-      case 'latin1':
-      case 'binary':
-        return len
-      case 'utf8':
-      case 'utf-8':
-      case undefined:
-        return utf8ToBytes(string).length
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return len * 2
-      case 'hex':
-        return len >>> 1
-      case 'base64':
-        return base64ToBytes(string).length
-      default:
-        if (loweredCase) return utf8ToBytes(string).length // assume utf8
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-Buffer.byteLength = byteLength
-
-function slowToString (encoding, start, end) {
-  var loweredCase = false
-
-  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
-  // property of a typed array.
-
-  // This behaves neither like String nor Uint8Array in that we set start/end
-  // to their upper/lower bounds if the value passed is out of range.
-  // undefined is handled specially as per ECMA-262 6th Edition,
-  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
-  if (start === undefined || start < 0) {
-    start = 0
-  }
-  // Return early if start > this.length. Done here to prevent potential uint32
-  // coercion fail below.
-  if (start > this.length) {
-    return ''
-  }
-
-  if (end === undefined || end > this.length) {
-    end = this.length
-  }
-
-  if (end <= 0) {
-    return ''
-  }
-
-  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
-  end >>>= 0
-  start >>>= 0
-
-  if (end <= start) {
-    return ''
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  while (true) {
-    switch (encoding) {
-      case 'hex':
-        return hexSlice(this, start, end)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Slice(this, start, end)
-
-      case 'ascii':
-        return asciiSlice(this, start, end)
-
-      case 'latin1':
-      case 'binary':
-        return latin1Slice(this, start, end)
-
-      case 'base64':
-        return base64Slice(this, start, end)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return utf16leSlice(this, start, end)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = (encoding + '').toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-// This property is used by `Buffer.isBuffer` (and the `is-buffer` npm package)
-// to detect a Buffer instance. It's not possible to use `instanceof Buffer`
-// reliably in a browserify context because there could be multiple different
-// copies of the 'buffer' package in use. This method works even for Buffer
-// instances that were created from another copy of the `buffer` package.
-// See: https://github.com/feross/buffer/issues/154
-Buffer.prototype._isBuffer = true
-
-function swap (b, n, m) {
-  var i = b[n]
-  b[n] = b[m]
-  b[m] = i
-}
-
-Buffer.prototype.swap16 = function swap16 () {
-  var len = this.length
-  if (len % 2 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 16-bits')
-  }
-  for (var i = 0; i < len; i += 2) {
-    swap(this, i, i + 1)
-  }
-  return this
-}
-
-Buffer.prototype.swap32 = function swap32 () {
-  var len = this.length
-  if (len % 4 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 32-bits')
-  }
-  for (var i = 0; i < len; i += 4) {
-    swap(this, i, i + 3)
-    swap(this, i + 1, i + 2)
-  }
-  return this
-}
-
-Buffer.prototype.swap64 = function swap64 () {
-  var len = this.length
-  if (len % 8 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 64-bits')
-  }
-  for (var i = 0; i < len; i += 8) {
-    swap(this, i, i + 7)
-    swap(this, i + 1, i + 6)
-    swap(this, i + 2, i + 5)
-    swap(this, i + 3, i + 4)
-  }
-  return this
-}
-
-Buffer.prototype.toString = function toString () {
-  var length = this.length
-  if (length === 0) return ''
-  if (arguments.length === 0) return utf8Slice(this, 0, length)
-  return slowToString.apply(this, arguments)
-}
-
-Buffer.prototype.equals = function equals (b) {
-  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
-  if (this === b) return true
-  return Buffer.compare(this, b) === 0
-}
-
-Buffer.prototype.inspect = function inspect () {
-  var str = ''
-  var max = exports.INSPECT_MAX_BYTES
-  if (this.length > 0) {
-    str = this.toString('hex', 0, max).match(/.{2}/g).join(' ')
-    if (this.length > max) str += ' ... '
-  }
-  return '<Buffer ' + str + '>'
-}
-
-Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
-  if (!Buffer.isBuffer(target)) {
-    throw new TypeError('Argument must be a Buffer')
-  }
-
-  if (start === undefined) {
-    start = 0
-  }
-  if (end === undefined) {
-    end = target ? target.length : 0
-  }
-  if (thisStart === undefined) {
-    thisStart = 0
-  }
-  if (thisEnd === undefined) {
-    thisEnd = this.length
-  }
-
-  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
-    throw new RangeError('out of range index')
-  }
-
-  if (thisStart >= thisEnd && start >= end) {
-    return 0
-  }
-  if (thisStart >= thisEnd) {
-    return -1
-  }
-  if (start >= end) {
-    return 1
-  }
-
-  start >>>= 0
-  end >>>= 0
-  thisStart >>>= 0
-  thisEnd >>>= 0
-
-  if (this === target) return 0
-
-  var x = thisEnd - thisStart
-  var y = end - start
-  var len = Math.min(x, y)
-
-  var thisCopy = this.slice(thisStart, thisEnd)
-  var targetCopy = target.slice(start, end)
-
-  for (var i = 0; i < len; ++i) {
-    if (thisCopy[i] !== targetCopy[i]) {
-      x = thisCopy[i]
-      y = targetCopy[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
-// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
-//
-// Arguments:
-// - buffer - a Buffer to search
-// - val - a string, Buffer, or number
-// - byteOffset - an index into `buffer`; will be clamped to an int32
-// - encoding - an optional encoding, relevant is val is a string
-// - dir - true for indexOf, false for lastIndexOf
-function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
-  // Empty buffer means no match
-  if (buffer.length === 0) return -1
-
-  // Normalize byteOffset
-  if (typeof byteOffset === 'string') {
-    encoding = byteOffset
-    byteOffset = 0
-  } else if (byteOffset > 0x7fffffff) {
-    byteOffset = 0x7fffffff
-  } else if (byteOffset < -0x80000000) {
-    byteOffset = -0x80000000
-  }
-  byteOffset = +byteOffset  // Coerce to Number.
-  if (numberIsNaN(byteOffset)) {
-    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
-    byteOffset = dir ? 0 : (buffer.length - 1)
-  }
-
-  // Normalize byteOffset: negative offsets start from the end of the buffer
-  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
-  if (byteOffset >= buffer.length) {
-    if (dir) return -1
-    else byteOffset = buffer.length - 1
-  } else if (byteOffset < 0) {
-    if (dir) byteOffset = 0
-    else return -1
-  }
-
-  // Normalize val
-  if (typeof val === 'string') {
-    val = Buffer.from(val, encoding)
-  }
-
-  // Finally, search either indexOf (if dir is true) or lastIndexOf
-  if (Buffer.isBuffer(val)) {
-    // Special case: looking for empty string/buffer always fails
-    if (val.length === 0) {
-      return -1
-    }
-    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
-  } else if (typeof val === 'number') {
-    val = val & 0xFF // Search for a byte value [0-255]
-    if (typeof Uint8Array.prototype.indexOf === 'function') {
-      if (dir) {
-        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
-      } else {
-        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
-      }
-    }
-    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
-  }
-
-  throw new TypeError('val must be string, number or Buffer')
-}
-
-function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
-  var indexSize = 1
-  var arrLength = arr.length
-  var valLength = val.length
-
-  if (encoding !== undefined) {
-    encoding = String(encoding).toLowerCase()
-    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
-        encoding === 'utf16le' || encoding === 'utf-16le') {
-      if (arr.length < 2 || val.length < 2) {
-        return -1
-      }
-      indexSize = 2
-      arrLength /= 2
-      valLength /= 2
-      byteOffset /= 2
-    }
-  }
-
-  function read (buf, i) {
-    if (indexSize === 1) {
-      return buf[i]
-    } else {
-      return buf.readUInt16BE(i * indexSize)
-    }
-  }
-
-  var i
-  if (dir) {
-    var foundIndex = -1
-    for (i = byteOffset; i < arrLength; i++) {
-      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
-        if (foundIndex === -1) foundIndex = i
-        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
-      } else {
-        if (foundIndex !== -1) i -= i - foundIndex
-        foundIndex = -1
-      }
-    }
-  } else {
-    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
-    for (i = byteOffset; i >= 0; i--) {
-      var found = true
-      for (var j = 0; j < valLength; j++) {
-        if (read(arr, i + j) !== read(val, j)) {
-          found = false
-          break
-        }
-      }
-      if (found) return i
-    }
-  }
-
-  return -1
-}
-
-Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
-  return this.indexOf(val, byteOffset, encoding) !== -1
-}
-
-Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
-}
-
-Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
-}
-
-function hexWrite (buf, string, offset, length) {
-  offset = Number(offset) || 0
-  var remaining = buf.length - offset
-  if (!length) {
-    length = remaining
-  } else {
-    length = Number(length)
-    if (length > remaining) {
-      length = remaining
-    }
-  }
-
-  // must be an even number of digits
-  var strLen = string.length
-  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
-
-  if (length > strLen / 2) {
-    length = strLen / 2
-  }
-  for (var i = 0; i < length; ++i) {
-    var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (numberIsNaN(parsed)) return i
-    buf[offset + i] = parsed
-  }
-  return i
-}
-
-function utf8Write (buf, string, offset, length) {
-  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-function asciiWrite (buf, string, offset, length) {
-  return blitBuffer(asciiToBytes(string), buf, offset, length)
-}
-
-function latin1Write (buf, string, offset, length) {
-  return asciiWrite(buf, string, offset, length)
-}
-
-function base64Write (buf, string, offset, length) {
-  return blitBuffer(base64ToBytes(string), buf, offset, length)
-}
-
-function ucs2Write (buf, string, offset, length) {
-  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-Buffer.prototype.write = function write (string, offset, length, encoding) {
-  // Buffer#write(string)
-  if (offset === undefined) {
-    encoding = 'utf8'
-    length = this.length
-    offset = 0
-  // Buffer#write(string, encoding)
-  } else if (length === undefined && typeof offset === 'string') {
-    encoding = offset
-    length = this.length
-    offset = 0
-  // Buffer#write(string, offset[, length][, encoding])
-  } else if (isFinite(offset)) {
-    offset = offset >>> 0
-    if (isFinite(length)) {
-      length = length >>> 0
-      if (encoding === undefined) encoding = 'utf8'
-    } else {
-      encoding = length
-      length = undefined
-    }
-  } else {
-    throw new Error(
-      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
-    )
-  }
-
-  var remaining = this.length - offset
-  if (length === undefined || length > remaining) length = remaining
-
-  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
-    throw new RangeError('Attempt to write outside buffer bounds')
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'hex':
-        return hexWrite(this, string, offset, length)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Write(this, string, offset, length)
-
-      case 'ascii':
-        return asciiWrite(this, string, offset, length)
-
-      case 'latin1':
-      case 'binary':
-        return latin1Write(this, string, offset, length)
-
-      case 'base64':
-        // Warning: maxLength not taken into account in base64Write
-        return base64Write(this, string, offset, length)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return ucs2Write(this, string, offset, length)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-Buffer.prototype.toJSON = function toJSON () {
-  return {
-    type: 'Buffer',
-    data: Array.prototype.slice.call(this._arr || this, 0)
-  }
-}
-
-function base64Slice (buf, start, end) {
-  if (start === 0 && end === buf.length) {
-    return base64.fromByteArray(buf)
-  } else {
-    return base64.fromByteArray(buf.slice(start, end))
-  }
-}
-
-function utf8Slice (buf, start, end) {
-  end = Math.min(buf.length, end)
-  var res = []
-
-  var i = start
-  while (i < end) {
-    var firstByte = buf[i]
-    var codePoint = null
-    var bytesPerSequence = (firstByte > 0xEF) ? 4
-      : (firstByte > 0xDF) ? 3
-      : (firstByte > 0xBF) ? 2
-      : 1
-
-    if (i + bytesPerSequence <= end) {
-      var secondByte, thirdByte, fourthByte, tempCodePoint
-
-      switch (bytesPerSequence) {
-        case 1:
-          if (firstByte < 0x80) {
-            codePoint = firstByte
-          }
-          break
-        case 2:
-          secondByte = buf[i + 1]
-          if ((secondByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
-            if (tempCodePoint > 0x7F) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 3:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
-            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 4:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          fourthByte = buf[i + 3]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
-            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
-              codePoint = tempCodePoint
-            }
-          }
-      }
-    }
-
-    if (codePoint === null) {
-      // we did not generate a valid codePoint so insert a
-      // replacement char (U+FFFD) and advance only 1 byte
-      codePoint = 0xFFFD
-      bytesPerSequence = 1
-    } else if (codePoint > 0xFFFF) {
-      // encode to utf16 (surrogate pair dance)
-      codePoint -= 0x10000
-      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
-      codePoint = 0xDC00 | codePoint & 0x3FF
-    }
-
-    res.push(codePoint)
-    i += bytesPerSequence
-  }
-
-  return decodeCodePointsArray(res)
-}
-
-// Based on http://stackoverflow.com/a/22747272/680742, the browser with
-// the lowest limit is Chrome, with 0x10000 args.
-// We go 1 magnitude less, for safety
-var MAX_ARGUMENTS_LENGTH = 0x1000
-
-function decodeCodePointsArray (codePoints) {
-  var len = codePoints.length
-  if (len <= MAX_ARGUMENTS_LENGTH) {
-    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
-  }
-
-  // Decode in chunks to avoid "call stack size exceeded".
-  var res = ''
-  var i = 0
-  while (i < len) {
-    res += String.fromCharCode.apply(
-      String,
-      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
-    )
-  }
-  return res
-}
-
-function asciiSlice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i] & 0x7F)
-  }
-  return ret
-}
-
-function latin1Slice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i])
-  }
-  return ret
-}
-
-function hexSlice (buf, start, end) {
-  var len = buf.length
-
-  if (!start || start < 0) start = 0
-  if (!end || end < 0 || end > len) end = len
-
-  var out = ''
-  for (var i = start; i < end; ++i) {
-    out += toHex(buf[i])
-  }
-  return out
-}
-
-function utf16leSlice (buf, start, end) {
-  var bytes = buf.slice(start, end)
-  var res = ''
-  for (var i = 0; i < bytes.length; i += 2) {
-    res += String.fromCharCode(bytes[i] + (bytes[i + 1] * 256))
-  }
-  return res
-}
-
-Buffer.prototype.slice = function slice (start, end) {
-  var len = this.length
-  start = ~~start
-  end = end === undefined ? len : ~~end
-
-  if (start < 0) {
-    start += len
-    if (start < 0) start = 0
-  } else if (start > len) {
-    start = len
-  }
-
-  if (end < 0) {
-    end += len
-    if (end < 0) end = 0
-  } else if (end > len) {
-    end = len
-  }
-
-  if (end < start) end = start
-
-  var newBuf = this.subarray(start, end)
-  // Return an augmented `Uint8Array` instance
-  newBuf.__proto__ = Buffer.prototype
-  return newBuf
-}
-
-/*
- * Need to make sure that buffer isn't trying to write out of bounds.
- */
-function checkOffset (offset, ext, length) {
-  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
-  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
-}
-
-Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) {
-    checkOffset(offset, byteLength, this.length)
-  }
-
-  var val = this[offset + --byteLength]
-  var mul = 1
-  while (byteLength > 0 && (mul *= 0x100)) {
-    val += this[offset + --byteLength] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  return this[offset]
-}
-
-Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return this[offset] | (this[offset + 1] << 8)
-}
-
-Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return (this[offset] << 8) | this[offset + 1]
-}
-
-Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return ((this[offset]) |
-      (this[offset + 1] << 8) |
-      (this[offset + 2] << 16)) +
-      (this[offset + 3] * 0x1000000)
-}
-
-Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] * 0x1000000) +
-    ((this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    this[offset + 3])
-}
-
-Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var i = byteLength
-  var mul = 1
-  var val = this[offset + --i]
-  while (i > 0 && (mul *= 0x100)) {
-    val += this[offset + --i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  if (!(this[offset] & 0x80)) return (this[offset])
-  return ((0xff - this[offset] + 1) * -1)
-}
-
-Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset] | (this[offset + 1] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset + 1] | (this[offset] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset]) |
-    (this[offset + 1] << 8) |
-    (this[offset + 2] << 16) |
-    (this[offset + 3] << 24)
-}
-
-Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] << 24) |
-    (this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    (this[offset + 3])
-}
-
-Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, true, 23, 4)
-}
-
-Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, false, 23, 4)
-}
-
-Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, true, 52, 8)
-}
-
-Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
-  offset = offset >>> 0
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, false, 52, 8)
-}
-
-function checkInt (buf, value, offset, ext, max, min) {
-  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
-  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-}
-
-Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var mul = 1
-  var i = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  byteLength = byteLength >>> 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  this[offset] = (value & 0xff)
-  this[offset + 1] = (value >>> 8)
-  return offset + 2
-}
-
-Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  this[offset] = (value >>> 8)
-  this[offset + 1] = (value & 0xff)
-  return offset + 2
-}
-
-Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  this[offset + 3] = (value >>> 24)
-  this[offset + 2] = (value >>> 16)
-  this[offset + 1] = (value >>> 8)
-  this[offset] = (value & 0xff)
-  return offset + 4
-}
-
-Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  this[offset] = (value >>> 24)
-  this[offset + 1] = (value >>> 16)
-  this[offset + 2] = (value >>> 8)
-  this[offset + 3] = (value & 0xff)
-  return offset + 4
-}
-
-Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    var limit = Math.pow(2, (8 * byteLength) - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = 0
-  var mul = 1
-  var sub = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    var limit = Math.pow(2, (8 * byteLength) - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  var sub = 0
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
-  if (value < 0) value = 0xff + value + 1
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  this[offset] = (value & 0xff)
-  this[offset + 1] = (value >>> 8)
-  return offset + 2
-}
-
-Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  this[offset] = (value >>> 8)
-  this[offset + 1] = (value & 0xff)
-  return offset + 2
-}
-
-Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  this[offset] = (value & 0xff)
-  this[offset + 1] = (value >>> 8)
-  this[offset + 2] = (value >>> 16)
-  this[offset + 3] = (value >>> 24)
-  return offset + 4
-}
-
-Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  if (value < 0) value = 0xffffffff + value + 1
-  this[offset] = (value >>> 24)
-  this[offset + 1] = (value >>> 16)
-  this[offset + 2] = (value >>> 8)
-  this[offset + 3] = (value & 0xff)
-  return offset + 4
-}
-
-function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-  if (offset < 0) throw new RangeError('Index out of range')
-}
-
-function writeFloat (buf, value, offset, littleEndian, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 23, 4)
-  return offset + 4
-}
-
-Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, false, noAssert)
-}
-
-function writeDouble (buf, value, offset, littleEndian, noAssert) {
-  value = +value
-  offset = offset >>> 0
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 52, 8)
-  return offset + 8
-}
-
-Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, false, noAssert)
-}
-
-// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
-Buffer.prototype.copy = function copy (target, targetStart, start, end) {
-  if (!start) start = 0
-  if (!end && end !== 0) end = this.length
-  if (targetStart >= target.length) targetStart = target.length
-  if (!targetStart) targetStart = 0
-  if (end > 0 && end < start) end = start
-
-  // Copy 0 bytes; we're done
-  if (end === start) return 0
-  if (target.length === 0 || this.length === 0) return 0
-
-  // Fatal error conditions
-  if (targetStart < 0) {
-    throw new RangeError('targetStart out of bounds')
-  }
-  if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
-  if (end < 0) throw new RangeError('sourceEnd out of bounds')
-
-  // Are we oob?
-  if (end > this.length) end = this.length
-  if (target.length - targetStart < end - start) {
-    end = target.length - targetStart + start
-  }
-
-  var len = end - start
-  var i
-
-  if (this === target && start < targetStart && targetStart < end) {
-    // descending copy from end
-    for (i = len - 1; i >= 0; --i) {
-      target[i + targetStart] = this[i + start]
-    }
-  } else if (len < 1000) {
-    // ascending copy from start
-    for (i = 0; i < len; ++i) {
-      target[i + targetStart] = this[i + start]
-    }
-  } else {
-    Uint8Array.prototype.set.call(
-      target,
-      this.subarray(start, start + len),
-      targetStart
-    )
-  }
-
-  return len
-}
-
-// Usage:
-//    buffer.fill(number[, offset[, end]])
-//    buffer.fill(buffer[, offset[, end]])
-//    buffer.fill(string[, offset[, end]][, encoding])
-Buffer.prototype.fill = function fill (val, start, end, encoding) {
-  // Handle string cases:
-  if (typeof val === 'string') {
-    if (typeof start === 'string') {
-      encoding = start
-      start = 0
-      end = this.length
-    } else if (typeof end === 'string') {
-      encoding = end
-      end = this.length
-    }
-    if (val.length === 1) {
-      var code = val.charCodeAt(0)
-      if (code < 256) {
-        val = code
-      }
-    }
-    if (encoding !== undefined && typeof encoding !== 'string') {
-      throw new TypeError('encoding must be a string')
-    }
-    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
-      throw new TypeError('Unknown encoding: ' + encoding)
-    }
-  } else if (typeof val === 'number') {
-    val = val & 255
-  }
-
-  // Invalid ranges are not set to a default, so can range check early.
-  if (start < 0 || this.length < start || this.length < end) {
-    throw new RangeError('Out of range index')
-  }
-
-  if (end <= start) {
-    return this
-  }
-
-  start = start >>> 0
-  end = end === undefined ? this.length : end >>> 0
-
-  if (!val) val = 0
-
-  var i
-  if (typeof val === 'number') {
-    for (i = start; i < end; ++i) {
-      this[i] = val
-    }
-  } else {
-    var bytes = Buffer.isBuffer(val)
-      ? val
-      : new Buffer(val, encoding)
-    var len = bytes.length
-    for (i = 0; i < end - start; ++i) {
-      this[i + start] = bytes[i % len]
-    }
-  }
-
-  return this
-}
-
-// HELPER FUNCTIONS
-// ================
-
-var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g
-
-function base64clean (str) {
-  // Node strips out invalid characters like \n and \t from the string, base64-js does not
-  str = str.trim().replace(INVALID_BASE64_RE, '')
-  // Node converts strings with length < 2 to ''
-  if (str.length < 2) return ''
-  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
-  while (str.length % 4 !== 0) {
-    str = str + '='
-  }
-  return str
-}
-
-function toHex (n) {
-  if (n < 16) return '0' + n.toString(16)
-  return n.toString(16)
-}
-
-function utf8ToBytes (string, units) {
-  units = units || Infinity
-  var codePoint
-  var length = string.length
-  var leadSurrogate = null
-  var bytes = []
-
-  for (var i = 0; i < length; ++i) {
-    codePoint = string.charCodeAt(i)
-
-    // is surrogate component
-    if (codePoint > 0xD7FF && codePoint < 0xE000) {
-      // last char was a lead
-      if (!leadSurrogate) {
-        // no lead yet
-        if (codePoint > 0xDBFF) {
-          // unexpected trail
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        } else if (i + 1 === length) {
-          // unpaired lead
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        }
-
-        // valid lead
-        leadSurrogate = codePoint
-
-        continue
-      }
-
-      // 2 leads in a row
-      if (codePoint < 0xDC00) {
-        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-        leadSurrogate = codePoint
-        continue
-      }
-
-      // valid surrogate pair
-      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
-    } else if (leadSurrogate) {
-      // valid bmp char, but last char was a lead
-      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-    }
-
-    leadSurrogate = null
-
-    // encode utf8
-    if (codePoint < 0x80) {
-      if ((units -= 1) < 0) break
-      bytes.push(codePoint)
-    } else if (codePoint < 0x800) {
-      if ((units -= 2) < 0) break
-      bytes.push(
-        codePoint >> 0x6 | 0xC0,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x10000) {
-      if ((units -= 3) < 0) break
-      bytes.push(
-        codePoint >> 0xC | 0xE0,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x110000) {
-      if ((units -= 4) < 0) break
-      bytes.push(
-        codePoint >> 0x12 | 0xF0,
-        codePoint >> 0xC & 0x3F | 0x80,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else {
-      throw new Error('Invalid code point')
-    }
-  }
-
-  return bytes
-}
-
-function asciiToBytes (str) {
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    // Node's code seems to be doing this and not & 0x7F..
-    byteArray.push(str.charCodeAt(i) & 0xFF)
-  }
-  return byteArray
-}
-
-function utf16leToBytes (str, units) {
-  var c, hi, lo
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    if ((units -= 2) < 0) break
-
-    c = str.charCodeAt(i)
-    hi = c >> 8
-    lo = c % 256
-    byteArray.push(lo)
-    byteArray.push(hi)
-  }
-
-  return byteArray
-}
-
-function base64ToBytes (str) {
-  return base64.toByteArray(base64clean(str))
-}
-
-function blitBuffer (src, dst, offset, length) {
-  for (var i = 0; i < length; ++i) {
-    if ((i + offset >= dst.length) || (i >= src.length)) break
-    dst[i + offset] = src[i]
-  }
-  return i
-}
-
-// Node 0.10 supports `ArrayBuffer` but lacks `ArrayBuffer.isView`
-function isArrayBufferView (obj) {
-  return (typeof ArrayBuffer.isView === 'function') && ArrayBuffer.isView(obj)
-}
-
-function numberIsNaN (obj) {
-  return obj !== obj // eslint-disable-line no-self-compare
-}
-
-},{"base64-js":1,"ieee754":7}],5:[function(require,module,exports){
-(function (Buffer){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// NOTE: These type checking functions intentionally don't use `instanceof`
-// because it is fragile and can be easily faked with `Object.create()`.
-
-function isArray(arg) {
-  if (Array.isArray) {
-    return Array.isArray(arg);
-  }
-  return objectToString(arg) === '[object Array]';
-}
-exports.isArray = isArray;
-
-function isBoolean(arg) {
-  return typeof arg === 'boolean';
-}
-exports.isBoolean = isBoolean;
-
-function isNull(arg) {
-  return arg === null;
-}
-exports.isNull = isNull;
-
-function isNullOrUndefined(arg) {
-  return arg == null;
-}
-exports.isNullOrUndefined = isNullOrUndefined;
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-exports.isNumber = isNumber;
-
-function isString(arg) {
-  return typeof arg === 'string';
-}
-exports.isString = isString;
-
-function isSymbol(arg) {
-  return typeof arg === 'symbol';
-}
-exports.isSymbol = isSymbol;
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-exports.isUndefined = isUndefined;
-
-function isRegExp(re) {
-  return objectToString(re) === '[object RegExp]';
-}
-exports.isRegExp = isRegExp;
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-exports.isObject = isObject;
-
-function isDate(d) {
-  return objectToString(d) === '[object Date]';
-}
-exports.isDate = isDate;
-
-function isError(e) {
-  return (objectToString(e) === '[object Error]' || e instanceof Error);
-}
-exports.isError = isError;
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-exports.isFunction = isFunction;
-
-function isPrimitive(arg) {
-  return arg === null ||
-         typeof arg === 'boolean' ||
-         typeof arg === 'number' ||
-         typeof arg === 'string' ||
-         typeof arg === 'symbol' ||  // ES6 symbol
-         typeof arg === 'undefined';
-}
-exports.isPrimitive = isPrimitive;
-
-exports.isBuffer = Buffer.isBuffer;
-
-function objectToString(o) {
-  return Object.prototype.toString.call(o);
-}
-
-}).call(this,{"isBuffer":require("../../is-buffer/index.js")})
-},{"../../is-buffer/index.js":9}],6:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-function EventEmitter() {
-  this._events = this._events || {};
-  this._maxListeners = this._maxListeners || undefined;
-}
-module.exports = EventEmitter;
-
-// Backwards-compat with node 0.10.x
-EventEmitter.EventEmitter = EventEmitter;
-
-EventEmitter.prototype._events = undefined;
-EventEmitter.prototype._maxListeners = undefined;
-
-// By default EventEmitters will print a warning if more than 10 listeners are
-// added to it. This is a useful default which helps finding memory leaks.
-EventEmitter.defaultMaxListeners = 10;
-
-// Obviously not all Emitters should be limited to 10. This function allows
-// that to be increased. Set to zero for unlimited.
-EventEmitter.prototype.setMaxListeners = function(n) {
-  if (!isNumber(n) || n < 0 || isNaN(n))
-    throw TypeError('n must be a positive number');
-  this._maxListeners = n;
-  return this;
-};
-
-EventEmitter.prototype.emit = function(type) {
-  var er, handler, len, args, i, listeners;
-
-  if (!this._events)
-    this._events = {};
-
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events.error ||
-        (isObject(this._events.error) && !this._events.error.length)) {
-      er = arguments[1];
-      if (er instanceof Error) {
-        throw er; // Unhandled 'error' event
-      } else {
-        // At least give some kind of context to the user
-        var err = new Error('Uncaught, unspecified "error" event. (' + er + ')');
-        err.context = er;
-        throw err;
-      }
-    }
-  }
-
-  handler = this._events[type];
-
-  if (isUndefined(handler))
-    return false;
-
-  if (isFunction(handler)) {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        args = Array.prototype.slice.call(arguments, 1);
-        handler.apply(this, args);
-    }
-  } else if (isObject(handler)) {
-    args = Array.prototype.slice.call(arguments, 1);
-    listeners = handler.slice();
-    len = listeners.length;
-    for (i = 0; i < len; i++)
-      listeners[i].apply(this, args);
-  }
-
-  return true;
-};
-
-EventEmitter.prototype.addListener = function(type, listener) {
-  var m;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events)
-    this._events = {};
-
-  // To avoid recursion in the case that type === "newListener"! Before
-  // adding it to the listeners, first emit "newListener".
-  if (this._events.newListener)
-    this.emit('newListener', type,
-              isFunction(listener.listener) ?
-              listener.listener : listener);
-
-  if (!this._events[type])
-    // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  else if (isObject(this._events[type]))
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  else
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-
-  // Check for listener leak
-  if (isObject(this._events[type]) && !this._events[type].warned) {
-    if (!isUndefined(this._maxListeners)) {
-      m = this._maxListeners;
-    } else {
-      m = EventEmitter.defaultMaxListeners;
-    }
-
-    if (m && m > 0 && this._events[type].length > m) {
-      this._events[type].warned = true;
-      console.error('(node) warning: possible EventEmitter memory ' +
-                    'leak detected. %d listeners added. ' +
-                    'Use emitter.setMaxListeners() to increase limit.',
-                    this._events[type].length);
-      if (typeof console.trace === 'function') {
-        // not supported in IE 10
-        console.trace();
-      }
-    }
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.once = function(type, listener) {
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  var fired = false;
-
-  function g() {
-    this.removeListener(type, g);
-
-    if (!fired) {
-      fired = true;
-      listener.apply(this, arguments);
-    }
-  }
-
-  g.listener = listener;
-  this.on(type, g);
-
-  return this;
-};
-
-// emits a 'removeListener' event iff the listener was removed
-EventEmitter.prototype.removeListener = function(type, listener) {
-  var list, position, length, i;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events || !this._events[type])
-    return this;
-
-  list = this._events[type];
-  length = list.length;
-  position = -1;
-
-  if (list === listener ||
-      (isFunction(list.listener) && list.listener === listener)) {
-    delete this._events[type];
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-
-  } else if (isObject(list)) {
-    for (i = length; i-- > 0;) {
-      if (list[i] === listener ||
-          (list[i].listener && list[i].listener === listener)) {
-        position = i;
-        break;
-      }
-    }
-
-    if (position < 0)
-      return this;
-
-    if (list.length === 1) {
-      list.length = 0;
-      delete this._events[type];
-    } else {
-      list.splice(position, 1);
-    }
-
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  var key, listeners;
-
-  if (!this._events)
-    return this;
-
-  // not listening for removeListener, no need to emit
-  if (!this._events.removeListener) {
-    if (arguments.length === 0)
-      this._events = {};
-    else if (this._events[type])
-      delete this._events[type];
-    return this;
-  }
-
-  // emit removeListener for all listeners on all events
-  if (arguments.length === 0) {
-    for (key in this._events) {
-      if (key === 'removeListener') continue;
-      this.removeAllListeners(key);
-    }
-    this.removeAllListeners('removeListener');
-    this._events = {};
-    return this;
-  }
-
-  listeners = this._events[type];
-
-  if (isFunction(listeners)) {
-    this.removeListener(type, listeners);
-  } else if (listeners) {
-    // LIFO order
-    while (listeners.length)
-      this.removeListener(type, listeners[listeners.length - 1]);
-  }
-  delete this._events[type];
-
-  return this;
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  var ret;
-  if (!this._events || !this._events[type])
-    ret = [];
-  else if (isFunction(this._events[type]))
-    ret = [this._events[type]];
-  else
-    ret = this._events[type].slice();
-  return ret;
-};
-
-EventEmitter.prototype.listenerCount = function(type) {
-  if (this._events) {
-    var evlistener = this._events[type];
-
-    if (isFunction(evlistener))
-      return 1;
-    else if (evlistener)
-      return evlistener.length;
-  }
-  return 0;
-};
-
-EventEmitter.listenerCount = function(emitter, type) {
-  return emitter.listenerCount(type);
-};
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-
-},{}],7:[function(require,module,exports){
-exports.read = function (buffer, offset, isLE, mLen, nBytes) {
-  var e, m
-  var eLen = nBytes * 8 - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var nBits = -7
-  var i = isLE ? (nBytes - 1) : 0
-  var d = isLE ? -1 : 1
-  var s = buffer[offset + i]
-
-  i += d
-
-  e = s & ((1 << (-nBits)) - 1)
-  s >>= (-nBits)
-  nBits += eLen
-  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  m = e & ((1 << (-nBits)) - 1)
-  e >>= (-nBits)
-  nBits += mLen
-  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  if (e === 0) {
-    e = 1 - eBias
-  } else if (e === eMax) {
-    return m ? NaN : ((s ? -1 : 1) * Infinity)
-  } else {
-    m = m + Math.pow(2, mLen)
-    e = e - eBias
-  }
-  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
-}
-
-exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
-  var e, m, c
-  var eLen = nBytes * 8 - mLen - 1
-  var eMax = (1 << eLen) - 1
-  var eBias = eMax >> 1
-  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
-  var i = isLE ? 0 : (nBytes - 1)
-  var d = isLE ? 1 : -1
-  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
-
-  value = Math.abs(value)
-
-  if (isNaN(value) || value === Infinity) {
-    m = isNaN(value) ? 1 : 0
-    e = eMax
-  } else {
-    e = Math.floor(Math.log(value) / Math.LN2)
-    if (value * (c = Math.pow(2, -e)) < 1) {
-      e--
-      c *= 2
-    }
-    if (e + eBias >= 1) {
-      value += rt / c
-    } else {
-      value += rt * Math.pow(2, 1 - eBias)
-    }
-    if (value * c >= 2) {
-      e++
-      c /= 2
-    }
-
-    if (e + eBias >= eMax) {
-      m = 0
-      e = eMax
-    } else if (e + eBias >= 1) {
-      m = (value * c - 1) * Math.pow(2, mLen)
-      e = e + eBias
-    } else {
-      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
-      e = 0
-    }
-  }
-
-  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
-
-  e = (e << mLen) | m
-  eLen += mLen
-  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
-
-  buffer[offset + i - d] |= s * 128
-}
-
-},{}],8:[function(require,module,exports){
-if (typeof Object.create === 'function') {
-  // implementation from standard node.js 'util' module
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    ctor.prototype = Object.create(superCtor.prototype, {
-      constructor: {
-        value: ctor,
-        enumerable: false,
-        writable: true,
-        configurable: true
-      }
-    });
-  };
-} else {
-  // old school shim for old browsers
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    var TempCtor = function () {}
-    TempCtor.prototype = superCtor.prototype
-    ctor.prototype = new TempCtor()
-    ctor.prototype.constructor = ctor
-  }
-}
-
-},{}],9:[function(require,module,exports){
-/*!
- * Determine if an object is a Buffer
- *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * @license  MIT
- */
-
-// The _isBuffer check is for Safari 5-7 support, because it's missing
-// Object.prototype.constructor. Remove this eventually
-module.exports = function (obj) {
-  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
-}
-
-function isBuffer (obj) {
-  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
-}
-
-// For Node v0.10 support. Remove this eventually.
-function isSlowBuffer (obj) {
-  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
-}
-
-},{}],10:[function(require,module,exports){
-var toString = {}.toString;
-
-module.exports = Array.isArray || function (arr) {
-  return toString.call(arr) == '[object Array]';
-};
-
-},{}],11:[function(require,module,exports){
-(function (process){
-'use strict';
-
-if (!process.version ||
-    process.version.indexOf('v0.') === 0 ||
-    process.version.indexOf('v1.') === 0 && process.version.indexOf('v1.8.') !== 0) {
-  module.exports = nextTick;
-} else {
-  module.exports = process.nextTick;
-}
-
-function nextTick(fn, arg1, arg2, arg3) {
-  if (typeof fn !== 'function') {
-    throw new TypeError('"callback" argument must be a function');
-  }
-  var len = arguments.length;
-  var args, i;
-  switch (len) {
-  case 0:
-  case 1:
-    return process.nextTick(fn);
-  case 2:
-    return process.nextTick(function afterTickOne() {
-      fn.call(null, arg1);
-    });
-  case 3:
-    return process.nextTick(function afterTickTwo() {
-      fn.call(null, arg1, arg2);
-    });
-  case 4:
-    return process.nextTick(function afterTickThree() {
-      fn.call(null, arg1, arg2, arg3);
-    });
-  default:
-    args = new Array(len - 1);
-    i = 0;
-    while (i < args.length) {
-      args[i++] = arguments[i];
-    }
-    return process.nextTick(function afterTick() {
-      fn.apply(null, args);
-    });
-  }
-}
-
-}).call(this,require('_process'))
-},{"_process":12}],12:[function(require,module,exports){
+(function(){function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s}return e})()({1:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -2725,2352 +184,39 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],13:[function(require,module,exports){
-module.exports = require('./lib/_stream_duplex.js');
-
-},{"./lib/_stream_duplex.js":14}],14:[function(require,module,exports){
-// a duplex stream is just a stream that is both readable and writable.
-// Since JS doesn't have multiple prototypal inheritance, this class
-// prototypally inherits from Readable, and then parasitically from
-// Writable.
-
-'use strict';
-
-/*<replacement>*/
-
-var objectKeys = Object.keys || function (obj) {
-  var keys = [];
-  for (var key in obj) {
-    keys.push(key);
-  }return keys;
-};
-/*</replacement>*/
-
-module.exports = Duplex;
-
-/*<replacement>*/
-var processNextTick = require('process-nextick-args');
-/*</replacement>*/
-
-/*<replacement>*/
-var util = require('core-util-is');
-util.inherits = require('inherits');
-/*</replacement>*/
-
-var Readable = require('./_stream_readable');
-var Writable = require('./_stream_writable');
-
-util.inherits(Duplex, Readable);
-
-var keys = objectKeys(Writable.prototype);
-for (var v = 0; v < keys.length; v++) {
-  var method = keys[v];
-  if (!Duplex.prototype[method]) Duplex.prototype[method] = Writable.prototype[method];
-}
-
-function Duplex(options) {
-  if (!(this instanceof Duplex)) return new Duplex(options);
-
-  Readable.call(this, options);
-  Writable.call(this, options);
-
-  if (options && options.readable === false) this.readable = false;
-
-  if (options && options.writable === false) this.writable = false;
-
-  this.allowHalfOpen = true;
-  if (options && options.allowHalfOpen === false) this.allowHalfOpen = false;
-
-  this.once('end', onend);
-}
-
-// the no-half-open enforcer
-function onend() {
-  // if we allow half-open state, or if the writable side ended,
-  // then we're ok.
-  if (this.allowHalfOpen || this._writableState.ended) return;
-
-  // no more data can be written.
-  // But allow more writes to happen in this tick.
-  processNextTick(onEndNT, this);
-}
-
-function onEndNT(self) {
-  self.end();
-}
-
-function forEach(xs, f) {
-  for (var i = 0, l = xs.length; i < l; i++) {
-    f(xs[i], i);
-  }
-}
-},{"./_stream_readable":16,"./_stream_writable":18,"core-util-is":5,"inherits":8,"process-nextick-args":11}],15:[function(require,module,exports){
-// a passthrough stream.
-// basically just the most minimal sort of Transform stream.
-// Every written chunk gets output as-is.
-
-'use strict';
-
-module.exports = PassThrough;
-
-var Transform = require('./_stream_transform');
-
-/*<replacement>*/
-var util = require('core-util-is');
-util.inherits = require('inherits');
-/*</replacement>*/
-
-util.inherits(PassThrough, Transform);
-
-function PassThrough(options) {
-  if (!(this instanceof PassThrough)) return new PassThrough(options);
-
-  Transform.call(this, options);
-}
-
-PassThrough.prototype._transform = function (chunk, encoding, cb) {
-  cb(null, chunk);
-};
-},{"./_stream_transform":17,"core-util-is":5,"inherits":8}],16:[function(require,module,exports){
-(function (process){
-'use strict';
-
-module.exports = Readable;
-
-/*<replacement>*/
-var processNextTick = require('process-nextick-args');
-/*</replacement>*/
-
-/*<replacement>*/
-var isArray = require('isarray');
-/*</replacement>*/
-
-/*<replacement>*/
-var Duplex;
-/*</replacement>*/
-
-Readable.ReadableState = ReadableState;
-
-/*<replacement>*/
-var EE = require('events').EventEmitter;
-
-var EElistenerCount = function (emitter, type) {
-  return emitter.listeners(type).length;
-};
-/*</replacement>*/
-
-/*<replacement>*/
-var Stream = require('./internal/streams/stream');
-/*</replacement>*/
-
-var Buffer = require('buffer').Buffer;
-/*<replacement>*/
-var bufferShim = require('buffer-shims');
-/*</replacement>*/
-
-/*<replacement>*/
-var util = require('core-util-is');
-util.inherits = require('inherits');
-/*</replacement>*/
-
-/*<replacement>*/
-var debugUtil = require('util');
-var debug = void 0;
-if (debugUtil && debugUtil.debuglog) {
-  debug = debugUtil.debuglog('stream');
-} else {
-  debug = function () {};
-}
-/*</replacement>*/
-
-var BufferList = require('./internal/streams/BufferList');
-var StringDecoder;
-
-util.inherits(Readable, Stream);
-
-var kProxyEvents = ['error', 'close', 'destroy', 'pause', 'resume'];
-
-function prependListener(emitter, event, fn) {
-  // Sadly this is not cacheable as some libraries bundle their own
-  // event emitter implementation with them.
-  if (typeof emitter.prependListener === 'function') {
-    return emitter.prependListener(event, fn);
-  } else {
-    // This is a hack to make sure that our error handler is attached before any
-    // userland ones.  NEVER DO THIS. This is here only because this code needs
-    // to continue to work with older versions of Node.js that do not include
-    // the prependListener() method. The goal is to eventually remove this hack.
-    if (!emitter._events || !emitter._events[event]) emitter.on(event, fn);else if (isArray(emitter._events[event])) emitter._events[event].unshift(fn);else emitter._events[event] = [fn, emitter._events[event]];
-  }
-}
-
-function ReadableState(options, stream) {
-  Duplex = Duplex || require('./_stream_duplex');
-
-  options = options || {};
-
-  // object stream flag. Used to make read(n) ignore n and to
-  // make all the buffer merging and length checks go away
-  this.objectMode = !!options.objectMode;
-
-  if (stream instanceof Duplex) this.objectMode = this.objectMode || !!options.readableObjectMode;
-
-  // the point at which it stops calling _read() to fill the buffer
-  // Note: 0 is a valid value, means "don't call _read preemptively ever"
-  var hwm = options.highWaterMark;
-  var defaultHwm = this.objectMode ? 16 : 16 * 1024;
-  this.highWaterMark = hwm || hwm === 0 ? hwm : defaultHwm;
-
-  // cast to ints.
-  this.highWaterMark = ~~this.highWaterMark;
-
-  // A linked list is used to store data chunks instead of an array because the
-  // linked list can remove elements from the beginning faster than
-  // array.shift()
-  this.buffer = new BufferList();
-  this.length = 0;
-  this.pipes = null;
-  this.pipesCount = 0;
-  this.flowing = null;
-  this.ended = false;
-  this.endEmitted = false;
-  this.reading = false;
-
-  // a flag to be able to tell if the onwrite cb is called immediately,
-  // or on a later tick.  We set this to true at first, because any
-  // actions that shouldn't happen until "later" should generally also
-  // not happen before the first write call.
-  this.sync = true;
-
-  // whenever we return null, then we set a flag to say
-  // that we're awaiting a 'readable' event emission.
-  this.needReadable = false;
-  this.emittedReadable = false;
-  this.readableListening = false;
-  this.resumeScheduled = false;
-
-  // Crypto is kind of old and crusty.  Historically, its default string
-  // encoding is 'binary' so we have to make this configurable.
-  // Everything else in the universe uses 'utf8', though.
-  this.defaultEncoding = options.defaultEncoding || 'utf8';
-
-  // when piping, we only care about 'readable' events that happen
-  // after read()ing all the bytes and not getting any pushback.
-  this.ranOut = false;
-
-  // the number of writers that are awaiting a drain event in .pipe()s
-  this.awaitDrain = 0;
-
-  // if true, a maybeReadMore has been scheduled
-  this.readingMore = false;
-
-  this.decoder = null;
-  this.encoding = null;
-  if (options.encoding) {
-    if (!StringDecoder) StringDecoder = require('string_decoder/').StringDecoder;
-    this.decoder = new StringDecoder(options.encoding);
-    this.encoding = options.encoding;
-  }
-}
-
-function Readable(options) {
-  Duplex = Duplex || require('./_stream_duplex');
-
-  if (!(this instanceof Readable)) return new Readable(options);
-
-  this._readableState = new ReadableState(options, this);
-
-  // legacy
-  this.readable = true;
-
-  if (options && typeof options.read === 'function') this._read = options.read;
-
-  Stream.call(this);
-}
-
-// Manually shove something into the read() buffer.
-// This returns true if the highWaterMark has not been hit yet,
-// similar to how Writable.write() returns true if you should
-// write() some more.
-Readable.prototype.push = function (chunk, encoding) {
-  var state = this._readableState;
-
-  if (!state.objectMode && typeof chunk === 'string') {
-    encoding = encoding || state.defaultEncoding;
-    if (encoding !== state.encoding) {
-      chunk = bufferShim.from(chunk, encoding);
-      encoding = '';
-    }
-  }
-
-  return readableAddChunk(this, state, chunk, encoding, false);
-};
-
-// Unshift should *always* be something directly out of read()
-Readable.prototype.unshift = function (chunk) {
-  var state = this._readableState;
-  return readableAddChunk(this, state, chunk, '', true);
-};
-
-Readable.prototype.isPaused = function () {
-  return this._readableState.flowing === false;
-};
-
-function readableAddChunk(stream, state, chunk, encoding, addToFront) {
-  var er = chunkInvalid(state, chunk);
-  if (er) {
-    stream.emit('error', er);
-  } else if (chunk === null) {
-    state.reading = false;
-    onEofChunk(stream, state);
-  } else if (state.objectMode || chunk && chunk.length > 0) {
-    if (state.ended && !addToFront) {
-      var e = new Error('stream.push() after EOF');
-      stream.emit('error', e);
-    } else if (state.endEmitted && addToFront) {
-      var _e = new Error('stream.unshift() after end event');
-      stream.emit('error', _e);
-    } else {
-      var skipAdd;
-      if (state.decoder && !addToFront && !encoding) {
-        chunk = state.decoder.write(chunk);
-        skipAdd = !state.objectMode && chunk.length === 0;
+},{}],2:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
       }
-
-      if (!addToFront) state.reading = false;
-
-      // Don't add to the buffer if we've decoded to an empty string chunk and
-      // we're not in object mode
-      if (!skipAdd) {
-        // if we want the data now, just emit it.
-        if (state.flowing && state.length === 0 && !state.sync) {
-          stream.emit('data', chunk);
-          stream.read(0);
-        } else {
-          // update the buffer info.
-          state.length += state.objectMode ? 1 : chunk.length;
-          if (addToFront) state.buffer.unshift(chunk);else state.buffer.push(chunk);
-
-          if (state.needReadable) emitReadable(stream);
-        }
-      }
-
-      maybeReadMore(stream, state);
-    }
-  } else if (!addToFront) {
-    state.reading = false;
-  }
-
-  return needMoreData(state);
-}
-
-// if it's past the high water mark, we can push in some more.
-// Also, if we have no data yet, we can stand some
-// more bytes.  This is to work around cases where hwm=0,
-// such as the repl.  Also, if the push() triggered a
-// readable event, and the user called read(largeNumber) such that
-// needReadable was set, then we ought to push more, so that another
-// 'readable' event will be triggered.
-function needMoreData(state) {
-  return !state.ended && (state.needReadable || state.length < state.highWaterMark || state.length === 0);
-}
-
-// backwards compatibility.
-Readable.prototype.setEncoding = function (enc) {
-  if (!StringDecoder) StringDecoder = require('string_decoder/').StringDecoder;
-  this._readableState.decoder = new StringDecoder(enc);
-  this._readableState.encoding = enc;
-  return this;
-};
-
-// Don't raise the hwm > 8MB
-var MAX_HWM = 0x800000;
-function computeNewHighWaterMark(n) {
-  if (n >= MAX_HWM) {
-    n = MAX_HWM;
-  } else {
-    // Get the next highest power of 2 to prevent increasing hwm excessively in
-    // tiny amounts
-    n--;
-    n |= n >>> 1;
-    n |= n >>> 2;
-    n |= n >>> 4;
-    n |= n >>> 8;
-    n |= n >>> 16;
-    n++;
-  }
-  return n;
-}
-
-// This function is designed to be inlinable, so please take care when making
-// changes to the function body.
-function howMuchToRead(n, state) {
-  if (n <= 0 || state.length === 0 && state.ended) return 0;
-  if (state.objectMode) return 1;
-  if (n !== n) {
-    // Only flow one buffer at a time
-    if (state.flowing && state.length) return state.buffer.head.data.length;else return state.length;
-  }
-  // If we're asking for more than the current hwm, then raise the hwm.
-  if (n > state.highWaterMark) state.highWaterMark = computeNewHighWaterMark(n);
-  if (n <= state.length) return n;
-  // Don't have enough
-  if (!state.ended) {
-    state.needReadable = true;
-    return 0;
-  }
-  return state.length;
-}
-
-// you can override either this method, or the async _read(n) below.
-Readable.prototype.read = function (n) {
-  debug('read', n);
-  n = parseInt(n, 10);
-  var state = this._readableState;
-  var nOrig = n;
-
-  if (n !== 0) state.emittedReadable = false;
-
-  // if we're doing read(0) to trigger a readable event, but we
-  // already have a bunch of data in the buffer, then just trigger
-  // the 'readable' event and move on.
-  if (n === 0 && state.needReadable && (state.length >= state.highWaterMark || state.ended)) {
-    debug('read: emitReadable', state.length, state.ended);
-    if (state.length === 0 && state.ended) endReadable(this);else emitReadable(this);
-    return null;
-  }
-
-  n = howMuchToRead(n, state);
-
-  // if we've ended, and we're now clear, then finish it up.
-  if (n === 0 && state.ended) {
-    if (state.length === 0) endReadable(this);
-    return null;
-  }
-
-  // All the actual chunk generation logic needs to be
-  // *below* the call to _read.  The reason is that in certain
-  // synthetic stream cases, such as passthrough streams, _read
-  // may be a completely synchronous operation which may change
-  // the state of the read buffer, providing enough data when
-  // before there was *not* enough.
-  //
-  // So, the steps are:
-  // 1. Figure out what the state of things will be after we do
-  // a read from the buffer.
-  //
-  // 2. If that resulting state will trigger a _read, then call _read.
-  // Note that this may be asynchronous, or synchronous.  Yes, it is
-  // deeply ugly to write APIs this way, but that still doesn't mean
-  // that the Readable class should behave improperly, as streams are
-  // designed to be sync/async agnostic.
-  // Take note if the _read call is sync or async (ie, if the read call
-  // has returned yet), so that we know whether or not it's safe to emit
-  // 'readable' etc.
-  //
-  // 3. Actually pull the requested chunks out of the buffer and return.
-
-  // if we need a readable event, then we need to do some reading.
-  var doRead = state.needReadable;
-  debug('need readable', doRead);
-
-  // if we currently have less than the highWaterMark, then also read some
-  if (state.length === 0 || state.length - n < state.highWaterMark) {
-    doRead = true;
-    debug('length less than watermark', doRead);
-  }
-
-  // however, if we've ended, then there's no point, and if we're already
-  // reading, then it's unnecessary.
-  if (state.ended || state.reading) {
-    doRead = false;
-    debug('reading or ended', doRead);
-  } else if (doRead) {
-    debug('do read');
-    state.reading = true;
-    state.sync = true;
-    // if the length is currently zero, then we *need* a readable event.
-    if (state.length === 0) state.needReadable = true;
-    // call internal read method
-    this._read(state.highWaterMark);
-    state.sync = false;
-    // If _read pushed data synchronously, then `reading` will be false,
-    // and we need to re-evaluate how much data we can return to the user.
-    if (!state.reading) n = howMuchToRead(nOrig, state);
-  }
-
-  var ret;
-  if (n > 0) ret = fromList(n, state);else ret = null;
-
-  if (ret === null) {
-    state.needReadable = true;
-    n = 0;
-  } else {
-    state.length -= n;
-  }
-
-  if (state.length === 0) {
-    // If we have nothing in the buffer, then we want to know
-    // as soon as we *do* get something into the buffer.
-    if (!state.ended) state.needReadable = true;
-
-    // If we tried to read() past the EOF, then emit end on the next tick.
-    if (nOrig !== n && state.ended) endReadable(this);
-  }
-
-  if (ret !== null) this.emit('data', ret);
-
-  return ret;
-};
-
-function chunkInvalid(state, chunk) {
-  var er = null;
-  if (!Buffer.isBuffer(chunk) && typeof chunk !== 'string' && chunk !== null && chunk !== undefined && !state.objectMode) {
-    er = new TypeError('Invalid non-string/buffer chunk');
-  }
-  return er;
-}
-
-function onEofChunk(stream, state) {
-  if (state.ended) return;
-  if (state.decoder) {
-    var chunk = state.decoder.end();
-    if (chunk && chunk.length) {
-      state.buffer.push(chunk);
-      state.length += state.objectMode ? 1 : chunk.length;
-    }
-  }
-  state.ended = true;
-
-  // emit 'readable' now to make sure it gets picked up.
-  emitReadable(stream);
-}
-
-// Don't emit readable right away in sync mode, because this can trigger
-// another read() call => stack overflow.  This way, it might trigger
-// a nextTick recursion warning, but that's not so bad.
-function emitReadable(stream) {
-  var state = stream._readableState;
-  state.needReadable = false;
-  if (!state.emittedReadable) {
-    debug('emitReadable', state.flowing);
-    state.emittedReadable = true;
-    if (state.sync) processNextTick(emitReadable_, stream);else emitReadable_(stream);
-  }
-}
-
-function emitReadable_(stream) {
-  debug('emit readable');
-  stream.emit('readable');
-  flow(stream);
-}
-
-// at this point, the user has presumably seen the 'readable' event,
-// and called read() to consume some data.  that may have triggered
-// in turn another _read(n) call, in which case reading = true if
-// it's in progress.
-// However, if we're not ended, or reading, and the length < hwm,
-// then go ahead and try to read some more preemptively.
-function maybeReadMore(stream, state) {
-  if (!state.readingMore) {
-    state.readingMore = true;
-    processNextTick(maybeReadMore_, stream, state);
-  }
-}
-
-function maybeReadMore_(stream, state) {
-  var len = state.length;
-  while (!state.reading && !state.flowing && !state.ended && state.length < state.highWaterMark) {
-    debug('maybeReadMore read 0');
-    stream.read(0);
-    if (len === state.length)
-      // didn't get any data, stop spinning.
-      break;else len = state.length;
-  }
-  state.readingMore = false;
-}
-
-// abstract method.  to be overridden in specific implementation classes.
-// call cb(er, data) where data is <= n in length.
-// for virtual (non-string, non-buffer) streams, "length" is somewhat
-// arbitrary, and perhaps not very meaningful.
-Readable.prototype._read = function (n) {
-  this.emit('error', new Error('_read() is not implemented'));
-};
-
-Readable.prototype.pipe = function (dest, pipeOpts) {
-  var src = this;
-  var state = this._readableState;
-
-  switch (state.pipesCount) {
-    case 0:
-      state.pipes = dest;
-      break;
-    case 1:
-      state.pipes = [state.pipes, dest];
-      break;
-    default:
-      state.pipes.push(dest);
-      break;
-  }
-  state.pipesCount += 1;
-  debug('pipe count=%d opts=%j', state.pipesCount, pipeOpts);
-
-  var doEnd = (!pipeOpts || pipeOpts.end !== false) && dest !== process.stdout && dest !== process.stderr;
-
-  var endFn = doEnd ? onend : cleanup;
-  if (state.endEmitted) processNextTick(endFn);else src.once('end', endFn);
-
-  dest.on('unpipe', onunpipe);
-  function onunpipe(readable) {
-    debug('onunpipe');
-    if (readable === src) {
-      cleanup();
-    }
-  }
-
-  function onend() {
-    debug('onend');
-    dest.end();
-  }
-
-  // when the dest drains, it reduces the awaitDrain counter
-  // on the source.  This would be more elegant with a .once()
-  // handler in flow(), but adding and removing repeatedly is
-  // too slow.
-  var ondrain = pipeOnDrain(src);
-  dest.on('drain', ondrain);
-
-  var cleanedUp = false;
-  function cleanup() {
-    debug('cleanup');
-    // cleanup event handlers once the pipe is broken
-    dest.removeListener('close', onclose);
-    dest.removeListener('finish', onfinish);
-    dest.removeListener('drain', ondrain);
-    dest.removeListener('error', onerror);
-    dest.removeListener('unpipe', onunpipe);
-    src.removeListener('end', onend);
-    src.removeListener('end', cleanup);
-    src.removeListener('data', ondata);
-
-    cleanedUp = true;
-
-    // if the reader is waiting for a drain event from this
-    // specific writer, then it would cause it to never start
-    // flowing again.
-    // So, if this is awaiting a drain, then we just call it now.
-    // If we don't know, then assume that we are waiting for one.
-    if (state.awaitDrain && (!dest._writableState || dest._writableState.needDrain)) ondrain();
-  }
-
-  // If the user pushes more data while we're writing to dest then we'll end up
-  // in ondata again. However, we only want to increase awaitDrain once because
-  // dest will only emit one 'drain' event for the multiple writes.
-  // => Introduce a guard on increasing awaitDrain.
-  var increasedAwaitDrain = false;
-  src.on('data', ondata);
-  function ondata(chunk) {
-    debug('ondata');
-    increasedAwaitDrain = false;
-    var ret = dest.write(chunk);
-    if (false === ret && !increasedAwaitDrain) {
-      // If the user unpiped during `dest.write()`, it is possible
-      // to get stuck in a permanently paused state if that write
-      // also returned false.
-      // => Check whether `dest` is still a piping destination.
-      if ((state.pipesCount === 1 && state.pipes === dest || state.pipesCount > 1 && indexOf(state.pipes, dest) !== -1) && !cleanedUp) {
-        debug('false write response, pause', src._readableState.awaitDrain);
-        src._readableState.awaitDrain++;
-        increasedAwaitDrain = true;
-      }
-      src.pause();
-    }
-  }
-
-  // if the dest has an error, then stop piping into it.
-  // however, don't suppress the throwing behavior for this.
-  function onerror(er) {
-    debug('onerror', er);
-    unpipe();
-    dest.removeListener('error', onerror);
-    if (EElistenerCount(dest, 'error') === 0) dest.emit('error', er);
-  }
-
-  // Make sure our error handler is attached before userland ones.
-  prependListener(dest, 'error', onerror);
-
-  // Both close and finish should trigger unpipe, but only once.
-  function onclose() {
-    dest.removeListener('finish', onfinish);
-    unpipe();
-  }
-  dest.once('close', onclose);
-  function onfinish() {
-    debug('onfinish');
-    dest.removeListener('close', onclose);
-    unpipe();
-  }
-  dest.once('finish', onfinish);
-
-  function unpipe() {
-    debug('unpipe');
-    src.unpipe(dest);
-  }
-
-  // tell the dest that it's being piped to
-  dest.emit('pipe', src);
-
-  // start the flow if it hasn't been started already.
-  if (!state.flowing) {
-    debug('pipe resume');
-    src.resume();
-  }
-
-  return dest;
-};
-
-function pipeOnDrain(src) {
-  return function () {
-    var state = src._readableState;
-    debug('pipeOnDrain', state.awaitDrain);
-    if (state.awaitDrain) state.awaitDrain--;
-    if (state.awaitDrain === 0 && EElistenerCount(src, 'data')) {
-      state.flowing = true;
-      flow(src);
-    }
-  };
-}
-
-Readable.prototype.unpipe = function (dest) {
-  var state = this._readableState;
-
-  // if we're not piping anywhere, then do nothing.
-  if (state.pipesCount === 0) return this;
-
-  // just one destination.  most common case.
-  if (state.pipesCount === 1) {
-    // passed in one, but it's not the right one.
-    if (dest && dest !== state.pipes) return this;
-
-    if (!dest) dest = state.pipes;
-
-    // got a match.
-    state.pipes = null;
-    state.pipesCount = 0;
-    state.flowing = false;
-    if (dest) dest.emit('unpipe', this);
-    return this;
-  }
-
-  // slow case. multiple pipe destinations.
-
-  if (!dest) {
-    // remove all.
-    var dests = state.pipes;
-    var len = state.pipesCount;
-    state.pipes = null;
-    state.pipesCount = 0;
-    state.flowing = false;
-
-    for (var i = 0; i < len; i++) {
-      dests[i].emit('unpipe', this);
-    }return this;
-  }
-
-  // try to find the right one.
-  var index = indexOf(state.pipes, dest);
-  if (index === -1) return this;
-
-  state.pipes.splice(index, 1);
-  state.pipesCount -= 1;
-  if (state.pipesCount === 1) state.pipes = state.pipes[0];
-
-  dest.emit('unpipe', this);
-
-  return this;
-};
-
-// set up data events if they are asked for
-// Ensure readable listeners eventually get something
-Readable.prototype.on = function (ev, fn) {
-  var res = Stream.prototype.on.call(this, ev, fn);
-
-  if (ev === 'data') {
-    // Start flowing on next tick if stream isn't explicitly paused
-    if (this._readableState.flowing !== false) this.resume();
-  } else if (ev === 'readable') {
-    var state = this._readableState;
-    if (!state.endEmitted && !state.readableListening) {
-      state.readableListening = state.needReadable = true;
-      state.emittedReadable = false;
-      if (!state.reading) {
-        processNextTick(nReadingNextTick, this);
-      } else if (state.length) {
-        emitReadable(this, state);
-      }
-    }
-  }
-
-  return res;
-};
-Readable.prototype.addListener = Readable.prototype.on;
-
-function nReadingNextTick(self) {
-  debug('readable nexttick read 0');
-  self.read(0);
-}
-
-// pause() and resume() are remnants of the legacy readable stream API
-// If the user uses them, then switch into old mode.
-Readable.prototype.resume = function () {
-  var state = this._readableState;
-  if (!state.flowing) {
-    debug('resume');
-    state.flowing = true;
-    resume(this, state);
-  }
-  return this;
-};
-
-function resume(stream, state) {
-  if (!state.resumeScheduled) {
-    state.resumeScheduled = true;
-    processNextTick(resume_, stream, state);
-  }
-}
-
-function resume_(stream, state) {
-  if (!state.reading) {
-    debug('resume read 0');
-    stream.read(0);
-  }
-
-  state.resumeScheduled = false;
-  state.awaitDrain = 0;
-  stream.emit('resume');
-  flow(stream);
-  if (state.flowing && !state.reading) stream.read(0);
-}
-
-Readable.prototype.pause = function () {
-  debug('call pause flowing=%j', this._readableState.flowing);
-  if (false !== this._readableState.flowing) {
-    debug('pause');
-    this._readableState.flowing = false;
-    this.emit('pause');
-  }
-  return this;
-};
-
-function flow(stream) {
-  var state = stream._readableState;
-  debug('flow', state.flowing);
-  while (state.flowing && stream.read() !== null) {}
-}
-
-// wrap an old-style stream as the async data source.
-// This is *not* part of the readable stream interface.
-// It is an ugly unfortunate mess of history.
-Readable.prototype.wrap = function (stream) {
-  var state = this._readableState;
-  var paused = false;
-
-  var self = this;
-  stream.on('end', function () {
-    debug('wrapped end');
-    if (state.decoder && !state.ended) {
-      var chunk = state.decoder.end();
-      if (chunk && chunk.length) self.push(chunk);
-    }
-
-    self.push(null);
-  });
-
-  stream.on('data', function (chunk) {
-    debug('wrapped data');
-    if (state.decoder) chunk = state.decoder.write(chunk);
-
-    // don't skip over falsy values in objectMode
-    if (state.objectMode && (chunk === null || chunk === undefined)) return;else if (!state.objectMode && (!chunk || !chunk.length)) return;
-
-    var ret = self.push(chunk);
-    if (!ret) {
-      paused = true;
-      stream.pause();
-    }
-  });
-
-  // proxy all the other methods.
-  // important when wrapping filters and duplexes.
-  for (var i in stream) {
-    if (this[i] === undefined && typeof stream[i] === 'function') {
-      this[i] = function (method) {
-        return function () {
-          return stream[method].apply(stream, arguments);
-        };
-      }(i);
-    }
-  }
-
-  // proxy certain important events.
-  for (var n = 0; n < kProxyEvents.length; n++) {
-    stream.on(kProxyEvents[n], self.emit.bind(self, kProxyEvents[n]));
-  }
-
-  // when we try to consume some more bytes, simply unpause the
-  // underlying stream.
-  self._read = function (n) {
-    debug('wrapped _read', n);
-    if (paused) {
-      paused = false;
-      stream.resume();
-    }
-  };
-
-  return self;
-};
-
-// exposed for testing purposes only.
-Readable._fromList = fromList;
-
-// Pluck off n bytes from an array of buffers.
-// Length is the combined lengths of all the buffers in the list.
-// This function is designed to be inlinable, so please take care when making
-// changes to the function body.
-function fromList(n, state) {
-  // nothing buffered
-  if (state.length === 0) return null;
-
-  var ret;
-  if (state.objectMode) ret = state.buffer.shift();else if (!n || n >= state.length) {
-    // read it all, truncate the list
-    if (state.decoder) ret = state.buffer.join('');else if (state.buffer.length === 1) ret = state.buffer.head.data;else ret = state.buffer.concat(state.length);
-    state.buffer.clear();
-  } else {
-    // read part of list
-    ret = fromListPartial(n, state.buffer, state.decoder);
-  }
-
-  return ret;
-}
-
-// Extracts only enough buffered data to satisfy the amount requested.
-// This function is designed to be inlinable, so please take care when making
-// changes to the function body.
-function fromListPartial(n, list, hasStrings) {
-  var ret;
-  if (n < list.head.data.length) {
-    // slice is the same for buffers and strings
-    ret = list.head.data.slice(0, n);
-    list.head.data = list.head.data.slice(n);
-  } else if (n === list.head.data.length) {
-    // first chunk is a perfect match
-    ret = list.shift();
-  } else {
-    // result spans more than one buffer
-    ret = hasStrings ? copyFromBufferString(n, list) : copyFromBuffer(n, list);
-  }
-  return ret;
-}
-
-// Copies a specified amount of characters from the list of buffered data
-// chunks.
-// This function is designed to be inlinable, so please take care when making
-// changes to the function body.
-function copyFromBufferString(n, list) {
-  var p = list.head;
-  var c = 1;
-  var ret = p.data;
-  n -= ret.length;
-  while (p = p.next) {
-    var str = p.data;
-    var nb = n > str.length ? str.length : n;
-    if (nb === str.length) ret += str;else ret += str.slice(0, n);
-    n -= nb;
-    if (n === 0) {
-      if (nb === str.length) {
-        ++c;
-        if (p.next) list.head = p.next;else list.head = list.tail = null;
-      } else {
-        list.head = p;
-        p.data = str.slice(nb);
-      }
-      break;
-    }
-    ++c;
-  }
-  list.length -= c;
-  return ret;
-}
-
-// Copies a specified amount of bytes from the list of buffered data chunks.
-// This function is designed to be inlinable, so please take care when making
-// changes to the function body.
-function copyFromBuffer(n, list) {
-  var ret = bufferShim.allocUnsafe(n);
-  var p = list.head;
-  var c = 1;
-  p.data.copy(ret);
-  n -= p.data.length;
-  while (p = p.next) {
-    var buf = p.data;
-    var nb = n > buf.length ? buf.length : n;
-    buf.copy(ret, ret.length - n, 0, nb);
-    n -= nb;
-    if (n === 0) {
-      if (nb === buf.length) {
-        ++c;
-        if (p.next) list.head = p.next;else list.head = list.tail = null;
-      } else {
-        list.head = p;
-        p.data = buf.slice(nb);
-      }
-      break;
-    }
-    ++c;
-  }
-  list.length -= c;
-  return ret;
-}
-
-function endReadable(stream) {
-  var state = stream._readableState;
-
-  // If we get here before consuming all the bytes, then that is a
-  // bug in node.  Should never happen.
-  if (state.length > 0) throw new Error('"endReadable()" called on non-empty stream');
-
-  if (!state.endEmitted) {
-    state.ended = true;
-    processNextTick(endReadableNT, state, stream);
-  }
-}
-
-function endReadableNT(state, stream) {
-  // Check that we didn't get one last unshift.
-  if (!state.endEmitted && state.length === 0) {
-    state.endEmitted = true;
-    stream.readable = false;
-    stream.emit('end');
-  }
-}
-
-function forEach(xs, f) {
-  for (var i = 0, l = xs.length; i < l; i++) {
-    f(xs[i], i);
-  }
-}
-
-function indexOf(xs, x) {
-  for (var i = 0, l = xs.length; i < l; i++) {
-    if (xs[i] === x) return i;
-  }
-  return -1;
-}
-}).call(this,require('_process'))
-},{"./_stream_duplex":14,"./internal/streams/BufferList":19,"./internal/streams/stream":20,"_process":12,"buffer":4,"buffer-shims":3,"core-util-is":5,"events":6,"inherits":8,"isarray":10,"process-nextick-args":11,"string_decoder/":27,"util":2}],17:[function(require,module,exports){
-// a transform stream is a readable/writable stream where you do
-// something with the data.  Sometimes it's called a "filter",
-// but that's not a great name for it, since that implies a thing where
-// some bits pass through, and others are simply ignored.  (That would
-// be a valid example of a transform, of course.)
-//
-// While the output is causally related to the input, it's not a
-// necessarily symmetric or synchronous transformation.  For example,
-// a zlib stream might take multiple plain-text writes(), and then
-// emit a single compressed chunk some time in the future.
-//
-// Here's how this works:
-//
-// The Transform stream has all the aspects of the readable and writable
-// stream classes.  When you write(chunk), that calls _write(chunk,cb)
-// internally, and returns false if there's a lot of pending writes
-// buffered up.  When you call read(), that calls _read(n) until
-// there's enough pending readable data buffered up.
-//
-// In a transform stream, the written data is placed in a buffer.  When
-// _read(n) is called, it transforms the queued up data, calling the
-// buffered _write cb's as it consumes chunks.  If consuming a single
-// written chunk would result in multiple output chunks, then the first
-// outputted bit calls the readcb, and subsequent chunks just go into
-// the read buffer, and will cause it to emit 'readable' if necessary.
-//
-// This way, back-pressure is actually determined by the reading side,
-// since _read has to be called to start processing a new chunk.  However,
-// a pathological inflate type of transform can cause excessive buffering
-// here.  For example, imagine a stream where every byte of input is
-// interpreted as an integer from 0-255, and then results in that many
-// bytes of output.  Writing the 4 bytes {ff,ff,ff,ff} would result in
-// 1kb of data being output.  In this case, you could write a very small
-// amount of input, and end up with a very large amount of output.  In
-// such a pathological inflating mechanism, there'd be no way to tell
-// the system to stop doing the transform.  A single 4MB write could
-// cause the system to run out of memory.
-//
-// However, even in such a pathological case, only a single written chunk
-// would be consumed, and then the rest would wait (un-transformed) until
-// the results of the previous transformed chunk were consumed.
-
-'use strict';
-
-module.exports = Transform;
-
-var Duplex = require('./_stream_duplex');
-
-/*<replacement>*/
-var util = require('core-util-is');
-util.inherits = require('inherits');
-/*</replacement>*/
-
-util.inherits(Transform, Duplex);
-
-function TransformState(stream) {
-  this.afterTransform = function (er, data) {
-    return afterTransform(stream, er, data);
-  };
-
-  this.needTransform = false;
-  this.transforming = false;
-  this.writecb = null;
-  this.writechunk = null;
-  this.writeencoding = null;
-}
-
-function afterTransform(stream, er, data) {
-  var ts = stream._transformState;
-  ts.transforming = false;
-
-  var cb = ts.writecb;
-
-  if (!cb) return stream.emit('error', new Error('no writecb in Transform class'));
-
-  ts.writechunk = null;
-  ts.writecb = null;
-
-  if (data !== null && data !== undefined) stream.push(data);
-
-  cb(er);
-
-  var rs = stream._readableState;
-  rs.reading = false;
-  if (rs.needReadable || rs.length < rs.highWaterMark) {
-    stream._read(rs.highWaterMark);
-  }
-}
-
-function Transform(options) {
-  if (!(this instanceof Transform)) return new Transform(options);
-
-  Duplex.call(this, options);
-
-  this._transformState = new TransformState(this);
-
-  var stream = this;
-
-  // start out asking for a readable event once data is transformed.
-  this._readableState.needReadable = true;
-
-  // we have implemented the _read method, and done the other things
-  // that Readable wants before the first _read call, so unset the
-  // sync guard flag.
-  this._readableState.sync = false;
-
-  if (options) {
-    if (typeof options.transform === 'function') this._transform = options.transform;
-
-    if (typeof options.flush === 'function') this._flush = options.flush;
-  }
-
-  // When the writable side finishes, then flush out anything remaining.
-  this.once('prefinish', function () {
-    if (typeof this._flush === 'function') this._flush(function (er, data) {
-      done(stream, er, data);
-    });else done(stream);
-  });
-}
-
-Transform.prototype.push = function (chunk, encoding) {
-  this._transformState.needTransform = false;
-  return Duplex.prototype.push.call(this, chunk, encoding);
-};
-
-// This is the part where you do stuff!
-// override this function in implementation classes.
-// 'chunk' is an input chunk.
-//
-// Call `push(newChunk)` to pass along transformed output
-// to the readable side.  You may call 'push' zero or more times.
-//
-// Call `cb(err)` when you are done with this chunk.  If you pass
-// an error, then that'll put the hurt on the whole operation.  If you
-// never call cb(), then you'll never get another chunk.
-Transform.prototype._transform = function (chunk, encoding, cb) {
-  throw new Error('_transform() is not implemented');
-};
-
-Transform.prototype._write = function (chunk, encoding, cb) {
-  var ts = this._transformState;
-  ts.writecb = cb;
-  ts.writechunk = chunk;
-  ts.writeencoding = encoding;
-  if (!ts.transforming) {
-    var rs = this._readableState;
-    if (ts.needTransform || rs.needReadable || rs.length < rs.highWaterMark) this._read(rs.highWaterMark);
-  }
-};
-
-// Doesn't matter what the args are here.
-// _transform does all the work.
-// That we got here means that the readable side wants more data.
-Transform.prototype._read = function (n) {
-  var ts = this._transformState;
-
-  if (ts.writechunk !== null && ts.writecb && !ts.transforming) {
-    ts.transforming = true;
-    this._transform(ts.writechunk, ts.writeencoding, ts.afterTransform);
-  } else {
-    // mark that we need a transform, so that any data that comes in
-    // will get processed, now that we've asked for it.
-    ts.needTransform = true;
-  }
-};
-
-function done(stream, er, data) {
-  if (er) return stream.emit('error', er);
-
-  if (data !== null && data !== undefined) stream.push(data);
-
-  // if there's nothing in the write buffer, then that means
-  // that nothing more will ever be provided
-  var ws = stream._writableState;
-  var ts = stream._transformState;
-
-  if (ws.length) throw new Error('Calling transform done when ws.length != 0');
-
-  if (ts.transforming) throw new Error('Calling transform done when still transforming');
-
-  return stream.push(null);
-}
-},{"./_stream_duplex":14,"core-util-is":5,"inherits":8}],18:[function(require,module,exports){
-(function (process){
-// A bit simpler than readable streams.
-// Implement an async ._write(chunk, encoding, cb), and it'll handle all
-// the drain event emission and buffering.
-
-'use strict';
-
-module.exports = Writable;
-
-/*<replacement>*/
-var processNextTick = require('process-nextick-args');
-/*</replacement>*/
-
-/*<replacement>*/
-var asyncWrite = !process.browser && ['v0.10', 'v0.9.'].indexOf(process.version.slice(0, 5)) > -1 ? setImmediate : processNextTick;
-/*</replacement>*/
-
-/*<replacement>*/
-var Duplex;
-/*</replacement>*/
-
-Writable.WritableState = WritableState;
-
-/*<replacement>*/
-var util = require('core-util-is');
-util.inherits = require('inherits');
-/*</replacement>*/
-
-/*<replacement>*/
-var internalUtil = {
-  deprecate: require('util-deprecate')
-};
-/*</replacement>*/
-
-/*<replacement>*/
-var Stream = require('./internal/streams/stream');
-/*</replacement>*/
-
-var Buffer = require('buffer').Buffer;
-/*<replacement>*/
-var bufferShim = require('buffer-shims');
-/*</replacement>*/
-
-util.inherits(Writable, Stream);
-
-function nop() {}
-
-function WriteReq(chunk, encoding, cb) {
-  this.chunk = chunk;
-  this.encoding = encoding;
-  this.callback = cb;
-  this.next = null;
-}
-
-function WritableState(options, stream) {
-  Duplex = Duplex || require('./_stream_duplex');
-
-  options = options || {};
-
-  // object stream flag to indicate whether or not this stream
-  // contains buffers or objects.
-  this.objectMode = !!options.objectMode;
-
-  if (stream instanceof Duplex) this.objectMode = this.objectMode || !!options.writableObjectMode;
-
-  // the point at which write() starts returning false
-  // Note: 0 is a valid value, means that we always return false if
-  // the entire buffer is not flushed immediately on write()
-  var hwm = options.highWaterMark;
-  var defaultHwm = this.objectMode ? 16 : 16 * 1024;
-  this.highWaterMark = hwm || hwm === 0 ? hwm : defaultHwm;
-
-  // cast to ints.
-  this.highWaterMark = ~~this.highWaterMark;
-
-  // drain event flag.
-  this.needDrain = false;
-  // at the start of calling end()
-  this.ending = false;
-  // when end() has been called, and returned
-  this.ended = false;
-  // when 'finish' is emitted
-  this.finished = false;
-
-  // should we decode strings into buffers before passing to _write?
-  // this is here so that some node-core streams can optimize string
-  // handling at a lower level.
-  var noDecode = options.decodeStrings === false;
-  this.decodeStrings = !noDecode;
-
-  // Crypto is kind of old and crusty.  Historically, its default string
-  // encoding is 'binary' so we have to make this configurable.
-  // Everything else in the universe uses 'utf8', though.
-  this.defaultEncoding = options.defaultEncoding || 'utf8';
-
-  // not an actual buffer we keep track of, but a measurement
-  // of how much we're waiting to get pushed to some underlying
-  // socket or file.
-  this.length = 0;
-
-  // a flag to see when we're in the middle of a write.
-  this.writing = false;
-
-  // when true all writes will be buffered until .uncork() call
-  this.corked = 0;
-
-  // a flag to be able to tell if the onwrite cb is called immediately,
-  // or on a later tick.  We set this to true at first, because any
-  // actions that shouldn't happen until "later" should generally also
-  // not happen before the first write call.
-  this.sync = true;
-
-  // a flag to know if we're processing previously buffered items, which
-  // may call the _write() callback in the same tick, so that we don't
-  // end up in an overlapped onwrite situation.
-  this.bufferProcessing = false;
-
-  // the callback that's passed to _write(chunk,cb)
-  this.onwrite = function (er) {
-    onwrite(stream, er);
-  };
-
-  // the callback that the user supplies to write(chunk,encoding,cb)
-  this.writecb = null;
-
-  // the amount that is being written when _write is called.
-  this.writelen = 0;
-
-  this.bufferedRequest = null;
-  this.lastBufferedRequest = null;
-
-  // number of pending user-supplied write callbacks
-  // this must be 0 before 'finish' can be emitted
-  this.pendingcb = 0;
-
-  // emit prefinish if the only thing we're waiting for is _write cbs
-  // This is relevant for synchronous Transform streams
-  this.prefinished = false;
-
-  // True if the error was already emitted and should not be thrown again
-  this.errorEmitted = false;
-
-  // count buffered requests
-  this.bufferedRequestCount = 0;
-
-  // allocate the first CorkedRequest, there is always
-  // one allocated and free to use, and we maintain at most two
-  this.corkedRequestsFree = new CorkedRequest(this);
-}
-
-WritableState.prototype.getBuffer = function getBuffer() {
-  var current = this.bufferedRequest;
-  var out = [];
-  while (current) {
-    out.push(current);
-    current = current.next;
-  }
-  return out;
-};
-
-(function () {
-  try {
-    Object.defineProperty(WritableState.prototype, 'buffer', {
-      get: internalUtil.deprecate(function () {
-        return this.getBuffer();
-      }, '_writableState.buffer is deprecated. Use _writableState.getBuffer ' + 'instead.')
     });
-  } catch (_) {}
-})();
-
-// Test _writableState for inheritance to account for Duplex streams,
-// whose prototype chain only points to Readable.
-var realHasInstance;
-if (typeof Symbol === 'function' && Symbol.hasInstance && typeof Function.prototype[Symbol.hasInstance] === 'function') {
-  realHasInstance = Function.prototype[Symbol.hasInstance];
-  Object.defineProperty(Writable, Symbol.hasInstance, {
-    value: function (object) {
-      if (realHasInstance.call(this, object)) return true;
-
-      return object && object._writableState instanceof WritableState;
-    }
-  });
+  };
 } else {
-  realHasInstance = function (object) {
-    return object instanceof this;
-  };
-}
-
-function Writable(options) {
-  Duplex = Duplex || require('./_stream_duplex');
-
-  // Writable ctor is applied to Duplexes, too.
-  // `realHasInstance` is necessary because using plain `instanceof`
-  // would return false, as no `_writableState` property is attached.
-
-  // Trying to use the custom `instanceof` for Writable here will also break the
-  // Node.js LazyTransform implementation, which has a non-trivial getter for
-  // `_writableState` that would lead to infinite recursion.
-  if (!realHasInstance.call(Writable, this) && !(this instanceof Duplex)) {
-    return new Writable(options);
-  }
-
-  this._writableState = new WritableState(options, this);
-
-  // legacy.
-  this.writable = true;
-
-  if (options) {
-    if (typeof options.write === 'function') this._write = options.write;
-
-    if (typeof options.writev === 'function') this._writev = options.writev;
-  }
-
-  Stream.call(this);
-}
-
-// Otherwise people can pipe Writable streams, which is just wrong.
-Writable.prototype.pipe = function () {
-  this.emit('error', new Error('Cannot pipe, not readable'));
-};
-
-function writeAfterEnd(stream, cb) {
-  var er = new Error('write after end');
-  // TODO: defer error events consistently everywhere, not just the cb
-  stream.emit('error', er);
-  processNextTick(cb, er);
-}
-
-// Checks that a user-supplied chunk is valid, especially for the particular
-// mode the stream is in. Currently this means that `null` is never accepted
-// and undefined/non-string values are only allowed in object mode.
-function validChunk(stream, state, chunk, cb) {
-  var valid = true;
-  var er = false;
-
-  if (chunk === null) {
-    er = new TypeError('May not write null values to stream');
-  } else if (typeof chunk !== 'string' && chunk !== undefined && !state.objectMode) {
-    er = new TypeError('Invalid non-string/buffer chunk');
-  }
-  if (er) {
-    stream.emit('error', er);
-    processNextTick(cb, er);
-    valid = false;
-  }
-  return valid;
-}
-
-Writable.prototype.write = function (chunk, encoding, cb) {
-  var state = this._writableState;
-  var ret = false;
-  var isBuf = Buffer.isBuffer(chunk);
-
-  if (typeof encoding === 'function') {
-    cb = encoding;
-    encoding = null;
-  }
-
-  if (isBuf) encoding = 'buffer';else if (!encoding) encoding = state.defaultEncoding;
-
-  if (typeof cb !== 'function') cb = nop;
-
-  if (state.ended) writeAfterEnd(this, cb);else if (isBuf || validChunk(this, state, chunk, cb)) {
-    state.pendingcb++;
-    ret = writeOrBuffer(this, state, isBuf, chunk, encoding, cb);
-  }
-
-  return ret;
-};
-
-Writable.prototype.cork = function () {
-  var state = this._writableState;
-
-  state.corked++;
-};
-
-Writable.prototype.uncork = function () {
-  var state = this._writableState;
-
-  if (state.corked) {
-    state.corked--;
-
-    if (!state.writing && !state.corked && !state.finished && !state.bufferProcessing && state.bufferedRequest) clearBuffer(this, state);
-  }
-};
-
-Writable.prototype.setDefaultEncoding = function setDefaultEncoding(encoding) {
-  // node::ParseEncoding() requires lower case.
-  if (typeof encoding === 'string') encoding = encoding.toLowerCase();
-  if (!(['hex', 'utf8', 'utf-8', 'ascii', 'binary', 'base64', 'ucs2', 'ucs-2', 'utf16le', 'utf-16le', 'raw'].indexOf((encoding + '').toLowerCase()) > -1)) throw new TypeError('Unknown encoding: ' + encoding);
-  this._writableState.defaultEncoding = encoding;
-  return this;
-};
-
-function decodeChunk(state, chunk, encoding) {
-  if (!state.objectMode && state.decodeStrings !== false && typeof chunk === 'string') {
-    chunk = bufferShim.from(chunk, encoding);
-  }
-  return chunk;
-}
-
-// if we're already writing something, then just put this
-// in the queue, and wait our turn.  Otherwise, call _write
-// If we return false, then we need a drain event, so set that flag.
-function writeOrBuffer(stream, state, isBuf, chunk, encoding, cb) {
-  if (!isBuf) {
-    chunk = decodeChunk(state, chunk, encoding);
-    if (Buffer.isBuffer(chunk)) encoding = 'buffer';
-  }
-  var len = state.objectMode ? 1 : chunk.length;
-
-  state.length += len;
-
-  var ret = state.length < state.highWaterMark;
-  // we must ensure that previous needDrain will not be reset to false.
-  if (!ret) state.needDrain = true;
-
-  if (state.writing || state.corked) {
-    var last = state.lastBufferedRequest;
-    state.lastBufferedRequest = new WriteReq(chunk, encoding, cb);
-    if (last) {
-      last.next = state.lastBufferedRequest;
-    } else {
-      state.bufferedRequest = state.lastBufferedRequest;
-    }
-    state.bufferedRequestCount += 1;
-  } else {
-    doWrite(stream, state, false, len, chunk, encoding, cb);
-  }
-
-  return ret;
-}
-
-function doWrite(stream, state, writev, len, chunk, encoding, cb) {
-  state.writelen = len;
-  state.writecb = cb;
-  state.writing = true;
-  state.sync = true;
-  if (writev) stream._writev(chunk, state.onwrite);else stream._write(chunk, encoding, state.onwrite);
-  state.sync = false;
-}
-
-function onwriteError(stream, state, sync, er, cb) {
-  --state.pendingcb;
-  if (sync) processNextTick(cb, er);else cb(er);
-
-  stream._writableState.errorEmitted = true;
-  stream.emit('error', er);
-}
-
-function onwriteStateUpdate(state) {
-  state.writing = false;
-  state.writecb = null;
-  state.length -= state.writelen;
-  state.writelen = 0;
-}
-
-function onwrite(stream, er) {
-  var state = stream._writableState;
-  var sync = state.sync;
-  var cb = state.writecb;
-
-  onwriteStateUpdate(state);
-
-  if (er) onwriteError(stream, state, sync, er, cb);else {
-    // Check if we're actually ready to finish, but don't emit yet
-    var finished = needFinish(state);
-
-    if (!finished && !state.corked && !state.bufferProcessing && state.bufferedRequest) {
-      clearBuffer(stream, state);
-    }
-
-    if (sync) {
-      /*<replacement>*/
-      asyncWrite(afterWrite, stream, state, finished, cb);
-      /*</replacement>*/
-    } else {
-      afterWrite(stream, state, finished, cb);
-    }
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
   }
 }
 
-function afterWrite(stream, state, finished, cb) {
-  if (!finished) onwriteDrain(stream, state);
-  state.pendingcb--;
-  cb();
-  finishMaybe(stream, state);
-}
-
-// Must force callback to be called on nextTick, so that we don't
-// emit 'drain' before the write() consumer gets the 'false' return
-// value, and has a chance to attach a 'drain' listener.
-function onwriteDrain(stream, state) {
-  if (state.length === 0 && state.needDrain) {
-    state.needDrain = false;
-    stream.emit('drain');
-  }
-}
-
-// if there's something in the buffer waiting, then process it
-function clearBuffer(stream, state) {
-  state.bufferProcessing = true;
-  var entry = state.bufferedRequest;
-
-  if (stream._writev && entry && entry.next) {
-    // Fast case, write everything using _writev()
-    var l = state.bufferedRequestCount;
-    var buffer = new Array(l);
-    var holder = state.corkedRequestsFree;
-    holder.entry = entry;
-
-    var count = 0;
-    while (entry) {
-      buffer[count] = entry;
-      entry = entry.next;
-      count += 1;
-    }
-
-    doWrite(stream, state, true, state.length, buffer, '', holder.finish);
-
-    // doWrite is almost always async, defer these to save a bit of time
-    // as the hot path ends with doWrite
-    state.pendingcb++;
-    state.lastBufferedRequest = null;
-    if (holder.next) {
-      state.corkedRequestsFree = holder.next;
-      holder.next = null;
-    } else {
-      state.corkedRequestsFree = new CorkedRequest(state);
-    }
-  } else {
-    // Slow case, write chunks one-by-one
-    while (entry) {
-      var chunk = entry.chunk;
-      var encoding = entry.encoding;
-      var cb = entry.callback;
-      var len = state.objectMode ? 1 : chunk.length;
-
-      doWrite(stream, state, false, len, chunk, encoding, cb);
-      entry = entry.next;
-      // if we didn't call the onwrite immediately, then
-      // it means that we need to wait until it does.
-      // also, that means that the chunk and cb are currently
-      // being processed, so move the buffer counter past them.
-      if (state.writing) {
-        break;
-      }
-    }
-
-    if (entry === null) state.lastBufferedRequest = null;
-  }
-
-  state.bufferedRequestCount = 0;
-  state.bufferedRequest = entry;
-  state.bufferProcessing = false;
-}
-
-Writable.prototype._write = function (chunk, encoding, cb) {
-  cb(new Error('_write() is not implemented'));
-};
-
-Writable.prototype._writev = null;
-
-Writable.prototype.end = function (chunk, encoding, cb) {
-  var state = this._writableState;
-
-  if (typeof chunk === 'function') {
-    cb = chunk;
-    chunk = null;
-    encoding = null;
-  } else if (typeof encoding === 'function') {
-    cb = encoding;
-    encoding = null;
-  }
-
-  if (chunk !== null && chunk !== undefined) this.write(chunk, encoding);
-
-  // .end() fully uncorks
-  if (state.corked) {
-    state.corked = 1;
-    this.uncork();
-  }
-
-  // ignore unnecessary end() calls.
-  if (!state.ending && !state.finished) endWritable(this, state, cb);
-};
-
-function needFinish(state) {
-  return state.ending && state.length === 0 && state.bufferedRequest === null && !state.finished && !state.writing;
-}
-
-function prefinish(stream, state) {
-  if (!state.prefinished) {
-    state.prefinished = true;
-    stream.emit('prefinish');
-  }
-}
-
-function finishMaybe(stream, state) {
-  var need = needFinish(state);
-  if (need) {
-    if (state.pendingcb === 0) {
-      prefinish(stream, state);
-      state.finished = true;
-      stream.emit('finish');
-    } else {
-      prefinish(stream, state);
-    }
-  }
-  return need;
-}
-
-function endWritable(stream, state, cb) {
-  state.ending = true;
-  finishMaybe(stream, state);
-  if (cb) {
-    if (state.finished) processNextTick(cb);else stream.once('finish', cb);
-  }
-  state.ended = true;
-  stream.writable = false;
-}
-
-// It seems a linked list but it is not
-// there will be only 2 of these for each stream
-function CorkedRequest(state) {
-  var _this = this;
-
-  this.next = null;
-  this.entry = null;
-  this.finish = function (err) {
-    var entry = _this.entry;
-    _this.entry = null;
-    while (entry) {
-      var cb = entry.callback;
-      state.pendingcb--;
-      cb(err);
-      entry = entry.next;
-    }
-    if (state.corkedRequestsFree) {
-      state.corkedRequestsFree.next = _this;
-    } else {
-      state.corkedRequestsFree = _this;
-    }
-  };
-}
-}).call(this,require('_process'))
-},{"./_stream_duplex":14,"./internal/streams/stream":20,"_process":12,"buffer":4,"buffer-shims":3,"core-util-is":5,"inherits":8,"process-nextick-args":11,"util-deprecate":28}],19:[function(require,module,exports){
-'use strict';
-
-var Buffer = require('buffer').Buffer;
-/*<replacement>*/
-var bufferShim = require('buffer-shims');
-/*</replacement>*/
-
-module.exports = BufferList;
-
-function BufferList() {
-  this.head = null;
-  this.tail = null;
-  this.length = 0;
-}
-
-BufferList.prototype.push = function (v) {
-  var entry = { data: v, next: null };
-  if (this.length > 0) this.tail.next = entry;else this.head = entry;
-  this.tail = entry;
-  ++this.length;
-};
-
-BufferList.prototype.unshift = function (v) {
-  var entry = { data: v, next: this.head };
-  if (this.length === 0) this.tail = entry;
-  this.head = entry;
-  ++this.length;
-};
-
-BufferList.prototype.shift = function () {
-  if (this.length === 0) return;
-  var ret = this.head.data;
-  if (this.length === 1) this.head = this.tail = null;else this.head = this.head.next;
-  --this.length;
-  return ret;
-};
-
-BufferList.prototype.clear = function () {
-  this.head = this.tail = null;
-  this.length = 0;
-};
-
-BufferList.prototype.join = function (s) {
-  if (this.length === 0) return '';
-  var p = this.head;
-  var ret = '' + p.data;
-  while (p = p.next) {
-    ret += s + p.data;
-  }return ret;
-};
-
-BufferList.prototype.concat = function (n) {
-  if (this.length === 0) return bufferShim.alloc(0);
-  if (this.length === 1) return this.head.data;
-  var ret = bufferShim.allocUnsafe(n >>> 0);
-  var p = this.head;
-  var i = 0;
-  while (p) {
-    p.data.copy(ret, i);
-    i += p.data.length;
-    p = p.next;
-  }
-  return ret;
-};
-},{"buffer":4,"buffer-shims":3}],20:[function(require,module,exports){
-module.exports = require('events').EventEmitter;
-
-},{"events":6}],21:[function(require,module,exports){
-module.exports = require('./readable').PassThrough
-
-},{"./readable":22}],22:[function(require,module,exports){
-exports = module.exports = require('./lib/_stream_readable.js');
-exports.Stream = exports;
-exports.Readable = exports;
-exports.Writable = require('./lib/_stream_writable.js');
-exports.Duplex = require('./lib/_stream_duplex.js');
-exports.Transform = require('./lib/_stream_transform.js');
-exports.PassThrough = require('./lib/_stream_passthrough.js');
-
-},{"./lib/_stream_duplex.js":14,"./lib/_stream_passthrough.js":15,"./lib/_stream_readable.js":16,"./lib/_stream_transform.js":17,"./lib/_stream_writable.js":18}],23:[function(require,module,exports){
-module.exports = require('./readable').Transform
-
-},{"./readable":22}],24:[function(require,module,exports){
-module.exports = require('./lib/_stream_writable.js');
-
-},{"./lib/_stream_writable.js":18}],25:[function(require,module,exports){
-module.exports = require('buffer')
-
-},{"buffer":4}],26:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-module.exports = Stream;
-
-var EE = require('events').EventEmitter;
-var inherits = require('inherits');
-
-inherits(Stream, EE);
-Stream.Readable = require('readable-stream/readable.js');
-Stream.Writable = require('readable-stream/writable.js');
-Stream.Duplex = require('readable-stream/duplex.js');
-Stream.Transform = require('readable-stream/transform.js');
-Stream.PassThrough = require('readable-stream/passthrough.js');
-
-// Backwards-compat with node 0.4.x
-Stream.Stream = Stream;
-
-
-
-// old-style streams.  Note that the pipe method (the only relevant
-// part of this class) is overridden in the Readable class.
-
-function Stream() {
-  EE.call(this);
-}
-
-Stream.prototype.pipe = function(dest, options) {
-  var source = this;
-
-  function ondata(chunk) {
-    if (dest.writable) {
-      if (false === dest.write(chunk) && source.pause) {
-        source.pause();
-      }
-    }
-  }
-
-  source.on('data', ondata);
-
-  function ondrain() {
-    if (source.readable && source.resume) {
-      source.resume();
-    }
-  }
-
-  dest.on('drain', ondrain);
-
-  // If the 'end' option is not supplied, dest.end() will be called when
-  // source gets the 'end' or 'close' events.  Only dest.end() once.
-  if (!dest._isStdio && (!options || options.end !== false)) {
-    source.on('end', onend);
-    source.on('close', onclose);
-  }
-
-  var didOnEnd = false;
-  function onend() {
-    if (didOnEnd) return;
-    didOnEnd = true;
-
-    dest.end();
-  }
-
-
-  function onclose() {
-    if (didOnEnd) return;
-    didOnEnd = true;
-
-    if (typeof dest.destroy === 'function') dest.destroy();
-  }
-
-  // don't leave dangling pipes when there are errors.
-  function onerror(er) {
-    cleanup();
-    if (EE.listenerCount(this, 'error') === 0) {
-      throw er; // Unhandled stream error in pipe.
-    }
-  }
-
-  source.on('error', onerror);
-  dest.on('error', onerror);
-
-  // remove all the event listeners that were added.
-  function cleanup() {
-    source.removeListener('data', ondata);
-    dest.removeListener('drain', ondrain);
-
-    source.removeListener('end', onend);
-    source.removeListener('close', onclose);
-
-    source.removeListener('error', onerror);
-    dest.removeListener('error', onerror);
-
-    source.removeListener('end', cleanup);
-    source.removeListener('close', cleanup);
-
-    dest.removeListener('close', cleanup);
-  }
-
-  source.on('end', cleanup);
-  source.on('close', cleanup);
-
-  dest.on('close', cleanup);
-
-  dest.emit('pipe', source);
-
-  // Allow for unix-like usage: A.pipe(B).pipe(C)
-  return dest;
-};
-
-},{"events":6,"inherits":8,"readable-stream/duplex.js":13,"readable-stream/passthrough.js":21,"readable-stream/readable.js":22,"readable-stream/transform.js":23,"readable-stream/writable.js":24}],27:[function(require,module,exports){
-'use strict';
-
-var Buffer = require('safe-buffer').Buffer;
-
-var isEncoding = Buffer.isEncoding || function (encoding) {
-  encoding = '' + encoding;
-  switch (encoding && encoding.toLowerCase()) {
-    case 'hex':case 'utf8':case 'utf-8':case 'ascii':case 'binary':case 'base64':case 'ucs2':case 'ucs-2':case 'utf16le':case 'utf-16le':case 'raw':
-      return true;
-    default:
-      return false;
-  }
-};
-
-function _normalizeEncoding(enc) {
-  if (!enc) return 'utf8';
-  var retried;
-  while (true) {
-    switch (enc) {
-      case 'utf8':
-      case 'utf-8':
-        return 'utf8';
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return 'utf16le';
-      case 'latin1':
-      case 'binary':
-        return 'latin1';
-      case 'base64':
-      case 'ascii':
-      case 'hex':
-        return enc;
-      default:
-        if (retried) return; // undefined
-        enc = ('' + enc).toLowerCase();
-        retried = true;
-    }
-  }
-};
-
-// Do not cache `Buffer.isEncoding` when checking encoding names as some
-// modules monkey-patch it to support additional encodings
-function normalizeEncoding(enc) {
-  var nenc = _normalizeEncoding(enc);
-  if (typeof nenc !== 'string' && (Buffer.isEncoding === isEncoding || !isEncoding(enc))) throw new Error('Unknown encoding: ' + enc);
-  return nenc || enc;
-}
-
-// StringDecoder provides an interface for efficiently splitting a series of
-// buffers into a series of JS strings without breaking apart multi-byte
-// characters.
-exports.StringDecoder = StringDecoder;
-function StringDecoder(encoding) {
-  this.encoding = normalizeEncoding(encoding);
-  var nb;
-  switch (this.encoding) {
-    case 'utf16le':
-      this.text = utf16Text;
-      this.end = utf16End;
-      nb = 4;
-      break;
-    case 'utf8':
-      this.fillLast = utf8FillLast;
-      nb = 4;
-      break;
-    case 'base64':
-      this.text = base64Text;
-      this.end = base64End;
-      nb = 3;
-      break;
-    default:
-      this.write = simpleWrite;
-      this.end = simpleEnd;
-      return;
-  }
-  this.lastNeed = 0;
-  this.lastTotal = 0;
-  this.lastChar = Buffer.allocUnsafe(nb);
-}
-
-StringDecoder.prototype.write = function (buf) {
-  if (buf.length === 0) return '';
-  var r;
-  var i;
-  if (this.lastNeed) {
-    r = this.fillLast(buf);
-    if (r === undefined) return '';
-    i = this.lastNeed;
-    this.lastNeed = 0;
-  } else {
-    i = 0;
-  }
-  if (i < buf.length) return r ? r + this.text(buf, i) : this.text(buf, i);
-  return r || '';
-};
-
-StringDecoder.prototype.end = utf8End;
-
-// Returns only complete characters in a Buffer
-StringDecoder.prototype.text = utf8Text;
-
-// Attempts to complete a partial non-UTF-8 character using bytes from a Buffer
-StringDecoder.prototype.fillLast = function (buf) {
-  if (this.lastNeed <= buf.length) {
-    buf.copy(this.lastChar, this.lastTotal - this.lastNeed, 0, this.lastNeed);
-    return this.lastChar.toString(this.encoding, 0, this.lastTotal);
-  }
-  buf.copy(this.lastChar, this.lastTotal - this.lastNeed, 0, buf.length);
-  this.lastNeed -= buf.length;
-};
-
-// Checks the type of a UTF-8 byte, whether it's ASCII, a leading byte, or a
-// continuation byte.
-function utf8CheckByte(byte) {
-  if (byte <= 0x7F) return 0;else if (byte >> 5 === 0x06) return 2;else if (byte >> 4 === 0x0E) return 3;else if (byte >> 3 === 0x1E) return 4;
-  return -1;
-}
-
-// Checks at most 3 bytes at the end of a Buffer in order to detect an
-// incomplete multi-byte UTF-8 character. The total number of bytes (2, 3, or 4)
-// needed to complete the UTF-8 character (if applicable) are returned.
-function utf8CheckIncomplete(self, buf, i) {
-  var j = buf.length - 1;
-  if (j < i) return 0;
-  var nb = utf8CheckByte(buf[j]);
-  if (nb >= 0) {
-    if (nb > 0) self.lastNeed = nb - 1;
-    return nb;
-  }
-  if (--j < i) return 0;
-  nb = utf8CheckByte(buf[j]);
-  if (nb >= 0) {
-    if (nb > 0) self.lastNeed = nb - 2;
-    return nb;
-  }
-  if (--j < i) return 0;
-  nb = utf8CheckByte(buf[j]);
-  if (nb >= 0) {
-    if (nb > 0) {
-      if (nb === 2) nb = 0;else self.lastNeed = nb - 3;
-    }
-    return nb;
-  }
-  return 0;
-}
-
-// Validates as many continuation bytes for a multi-byte UTF-8 character as
-// needed or are available. If we see a non-continuation byte where we expect
-// one, we "replace" the validated continuation bytes we've seen so far with
-// UTF-8 replacement characters ('\ufffd'), to match v8's UTF-8 decoding
-// behavior. The continuation byte check is included three times in the case
-// where all of the continuation bytes for a character exist in the same buffer.
-// It is also done this way as a slight performance increase instead of using a
-// loop.
-function utf8CheckExtraBytes(self, buf, p) {
-  if ((buf[0] & 0xC0) !== 0x80) {
-    self.lastNeed = 0;
-    return '\ufffd'.repeat(p);
-  }
-  if (self.lastNeed > 1 && buf.length > 1) {
-    if ((buf[1] & 0xC0) !== 0x80) {
-      self.lastNeed = 1;
-      return '\ufffd'.repeat(p + 1);
-    }
-    if (self.lastNeed > 2 && buf.length > 2) {
-      if ((buf[2] & 0xC0) !== 0x80) {
-        self.lastNeed = 2;
-        return '\ufffd'.repeat(p + 2);
-      }
-    }
-  }
-}
-
-// Attempts to complete a multi-byte UTF-8 character using bytes from a Buffer.
-function utf8FillLast(buf) {
-  var p = this.lastTotal - this.lastNeed;
-  var r = utf8CheckExtraBytes(this, buf, p);
-  if (r !== undefined) return r;
-  if (this.lastNeed <= buf.length) {
-    buf.copy(this.lastChar, p, 0, this.lastNeed);
-    return this.lastChar.toString(this.encoding, 0, this.lastTotal);
-  }
-  buf.copy(this.lastChar, p, 0, buf.length);
-  this.lastNeed -= buf.length;
-}
-
-// Returns all complete UTF-8 characters in a Buffer. If the Buffer ended on a
-// partial character, the character's bytes are buffered until the required
-// number of bytes are available.
-function utf8Text(buf, i) {
-  var total = utf8CheckIncomplete(this, buf, i);
-  if (!this.lastNeed) return buf.toString('utf8', i);
-  this.lastTotal = total;
-  var end = buf.length - (total - this.lastNeed);
-  buf.copy(this.lastChar, 0, end);
-  return buf.toString('utf8', i, end);
-}
-
-// For UTF-8, a replacement character for each buffered byte of a (partial)
-// character needs to be added to the output.
-function utf8End(buf) {
-  var r = buf && buf.length ? this.write(buf) : '';
-  if (this.lastNeed) return r + '\ufffd'.repeat(this.lastTotal - this.lastNeed);
-  return r;
-}
-
-// UTF-16LE typically needs two bytes per character, but even if we have an even
-// number of bytes available, we need to check if we end on a leading/high
-// surrogate. In that case, we need to wait for the next two bytes in order to
-// decode the last character properly.
-function utf16Text(buf, i) {
-  if ((buf.length - i) % 2 === 0) {
-    var r = buf.toString('utf16le', i);
-    if (r) {
-      var c = r.charCodeAt(r.length - 1);
-      if (c >= 0xD800 && c <= 0xDBFF) {
-        this.lastNeed = 2;
-        this.lastTotal = 4;
-        this.lastChar[0] = buf[buf.length - 2];
-        this.lastChar[1] = buf[buf.length - 1];
-        return r.slice(0, -1);
-      }
-    }
-    return r;
-  }
-  this.lastNeed = 1;
-  this.lastTotal = 2;
-  this.lastChar[0] = buf[buf.length - 1];
-  return buf.toString('utf16le', i, buf.length - 1);
-}
-
-// For UTF-16LE we do not explicitly append special replacement characters if we
-// end on a partial character, we simply let v8 handle that.
-function utf16End(buf) {
-  var r = buf && buf.length ? this.write(buf) : '';
-  if (this.lastNeed) {
-    var end = this.lastTotal - this.lastNeed;
-    return r + this.lastChar.toString('utf16le', 0, end);
-  }
-  return r;
-}
-
-function base64Text(buf, i) {
-  var n = (buf.length - i) % 3;
-  if (n === 0) return buf.toString('base64', i);
-  this.lastNeed = 3 - n;
-  this.lastTotal = 3;
-  if (n === 1) {
-    this.lastChar[0] = buf[buf.length - 1];
-  } else {
-    this.lastChar[0] = buf[buf.length - 2];
-    this.lastChar[1] = buf[buf.length - 1];
-  }
-  return buf.toString('base64', i, buf.length - n);
-}
-
-function base64End(buf) {
-  var r = buf && buf.length ? this.write(buf) : '';
-  if (this.lastNeed) return r + this.lastChar.toString('base64', 0, 3 - this.lastNeed);
-  return r;
-}
-
-// Pass bytes on through for single-byte encodings (e.g. ascii, latin1, hex)
-function simpleWrite(buf) {
-  return buf.toString(this.encoding);
-}
-
-function simpleEnd(buf) {
-  return buf && buf.length ? this.write(buf) : '';
-}
-},{"safe-buffer":25}],28:[function(require,module,exports){
-(function (global){
-
-/**
- * Module exports.
- */
-
-module.exports = deprecate;
-
-/**
- * Mark that a method should not be used.
- * Returns a modified function which warns once by default.
- *
- * If `localStorage.noDeprecation = true` is set, then it is a no-op.
- *
- * If `localStorage.throwDeprecation = true` is set, then deprecated functions
- * will throw an Error when invoked.
- *
- * If `localStorage.traceDeprecation = true` is set, then deprecated functions
- * will invoke `console.trace()` instead of `console.error()`.
- *
- * @param {Function} fn - the function to deprecate
- * @param {String} msg - the string to print to the console when `fn` is invoked
- * @returns {Function} a new "deprecated" version of `fn`
- * @api public
- */
-
-function deprecate (fn, msg) {
-  if (config('noDeprecation')) {
-    return fn;
-  }
-
-  var warned = false;
-  function deprecated() {
-    if (!warned) {
-      if (config('throwDeprecation')) {
-        throw new Error(msg);
-      } else if (config('traceDeprecation')) {
-        console.trace(msg);
-      } else {
-        console.warn(msg);
-      }
-      warned = true;
-    }
-    return fn.apply(this, arguments);
-  }
-
-  return deprecated;
-}
-
-/**
- * Checks `localStorage` for boolean values for the given `name`.
- *
- * @param {String} name
- * @returns {Boolean}
- * @api private
- */
-
-function config (name) {
-  // accessing global.localStorage can trigger a DOMException in sandboxed iframes
-  try {
-    if (!global.localStorage) return false;
-  } catch (_) {
-    return false;
-  }
-  var val = global.localStorage[name];
-  if (null == val) return false;
-  return String(val).toLowerCase() === 'true';
-}
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],29:[function(require,module,exports){
-arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],30:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],31:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -5660,7 +806,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":30,"_process":12,"inherits":29}],32:[function(require,module,exports){
+},{"./support/isBuffer":3,"_process":1,"inherits":2}],5:[function(require,module,exports){
 /* For in-depth documentation about the use of this SDK visit https://github.com/Enngage/KenticoCloudDeliveryTypeScriptSDK **/
 
 var kc = require('kentico-cloud-delivery-typescript-sdk');
@@ -5808,79 +954,71 @@ deliveryClient.items()
     .then(response => console.log(`Item '${response.firstItem.system.codename}' was fetched using a Promise`));
 
 
-},{"kentico-cloud-delivery-typescript-sdk":39}],33:[function(require,module,exports){
+},{"kentico-cloud-delivery-typescript-sdk":13}],6:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
-// queries
-var single_type_query_class_1 = require("../query/type/single-type-query.class");
-var multiple_type_query_class_1 = require("../query/type/multiple-type-query.class");
-var single_item_query_class_1 = require("../query/item/single-item-query.class");
-var multiple_item_query_class_1 = require("../query/item/multiple-item-query.class");
-var taxonomy_query_class_1 = require("../query/taxonomy/taxonomy-query.class");
-var taxonomies_query_class_1 = require("../query/taxonomy/taxonomies-query.class");
+var library_version_1 = require("../library-version");
 var element_query_class_1 = require("../query/element/element-query.class");
-// services
+var multiple_item_query_class_1 = require("../query/item/multiple-item-query.class");
+var single_item_query_class_1 = require("../query/item/single-item-query.class");
+var taxonomies_query_class_1 = require("../query/taxonomy/taxonomies-query.class");
+var taxonomy_query_class_1 = require("../query/taxonomy/taxonomy-query.class");
+var multiple_type_query_class_1 = require("../query/type/multiple-type-query.class");
+var single_type_query_class_1 = require("../query/type/single-type-query.class");
+var http_service_1 = require("../services/http/http.service");
 var query_service_1 = require("../services/query.service");
-var DeliveryClient = /** @class */ (function (_super) {
-    __extends(DeliveryClient, _super);
+var DeliveryClient = /** @class */ (function () {
     /**
     * Delivery client used to fetch data from Kentico Cloud
     * @constructor
     * @param {DeliveryClientConfig} config - The client configuration
     */
     function DeliveryClient(config) {
-        var _this = _super.call(this, config) || this;
-        _this.config = config;
-        return _this;
+        this.config = config;
+        this.queryService = new query_service_1.QueryService(config, new http_service_1.HttpService(), {
+            host: library_version_1.repoHost,
+            name: library_version_1.packageId,
+            version: library_version_1.version
+        });
     }
     /**
     * Gets query for multiple types
     */
     DeliveryClient.prototype.types = function () {
-        return new multiple_type_query_class_1.MultipleTypeQuery(this.config);
+        return new multiple_type_query_class_1.MultipleTypeQuery(this.config, this.queryService);
     };
     /**
     * Gets query for single type
     * @param {string} typeCodename - Codename of the type to fetch
     */
     DeliveryClient.prototype.type = function (typeCodename) {
-        return new single_type_query_class_1.SingleTypeQuery(this.config, typeCodename);
+        return new single_type_query_class_1.SingleTypeQuery(this.config, this.queryService, typeCodename);
     };
     /**
     * Gets query for multiple items
     */
     DeliveryClient.prototype.items = function () {
-        return new multiple_item_query_class_1.MultipleItemQuery(this.config);
+        return new multiple_item_query_class_1.MultipleItemQuery(this.config, this.queryService);
     };
     /**
     * Gets query for single item
     * @param {string} codename - Codename of item to fetch
     */
     DeliveryClient.prototype.item = function (codename) {
-        return new single_item_query_class_1.SingleItemQuery(this.config, codename);
+        return new single_item_query_class_1.SingleItemQuery(this.config, this.queryService, codename);
     };
     /**
     * Gets query for single taxonomy
     * @param {string} codename - Codename of taxonomy to fetch
     */
     DeliveryClient.prototype.taxonomy = function (codename) {
-        return new taxonomy_query_class_1.TaxonomyQuery(this.config, codename);
+        return new taxonomy_query_class_1.TaxonomyQuery(this.config, this.queryService, codename);
     };
     /**
     * Gets query for multiple taxonomies
     */
     DeliveryClient.prototype.taxonomies = function () {
-        return new taxonomies_query_class_1.TaxonomiesQuery(this.config);
+        return new taxonomies_query_class_1.TaxonomiesQuery(this.config, this.queryService);
     };
     /**
      * Gets query for an element within a type
@@ -5888,13 +1026,13 @@ var DeliveryClient = /** @class */ (function (_super) {
      * @param {string} elementCodename - Codename of the element
      */
     DeliveryClient.prototype.element = function (typeCodename, elementCodename) {
-        return new element_query_class_1.ElementQuery(this.config, typeCodename, elementCodename);
+        return new element_query_class_1.ElementQuery(this.config, this.queryService, typeCodename, elementCodename);
     };
     return DeliveryClient;
-}(query_service_1.QueryService));
+}());
 exports.DeliveryClient = DeliveryClient;
 
-},{"../query/element/element-query.class":69,"../query/item/multiple-item-query.class":71,"../query/item/single-item-query.class":72,"../query/taxonomy/taxonomies-query.class":74,"../query/taxonomy/taxonomy-query.class":75,"../query/type/multiple-type-query.class":77,"../query/type/single-type-query.class":78,"../services/query.service":82}],34:[function(require,module,exports){
+},{"../library-version":14,"../query/element/element-query.class":44,"../query/item/multiple-item-query.class":46,"../query/item/single-item-query.class":47,"../query/taxonomy/taxonomies-query.class":49,"../query/taxonomy/taxonomy-query.class":50,"../query/type/multiple-type-query.class":52,"../query/type/single-type-query.class":53,"../services/http/http.service":58,"../services/query.service":60}],7:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var DeliveryClientConfig = /** @class */ (function () {
@@ -5905,8 +1043,13 @@ var DeliveryClientConfig = /** @class */ (function () {
     * @param {TypeResolver[]} typeResolvers - List of resolvers that are used to create strongly typed objects from Kentico Cloud response
     * @param {boolean} enableAdvancedLogging - Indicates if advanced (developer's) issues are logged in console. Enable for development and disable in production.
     * @param {string} previewApiKey - Preview API key used to get unpublished content items
-    * @param {boolean} enablePreviewMode - Indicates if preview mode is enabled globally
+    * @param {boolean} enablePreviewMode - Indicates if preview mode is enabled globally. This can be overriden on query level
     * @param {string} defaultLanguage - Sets default language that will be used for all queries unless overriden with query parameters
+    * @param {string} baseUrl - Can be used to configure custom base url
+    * @param {string} basePreviewUrl - Can be used to configure custom preview url
+    * @param {string} securedApiKey - Secured API key: Use secured API only when running on Node.JS server, otherwise you can expose your key
+    * @param {boolean} enableSecuredMode - Indicates if secured mode is enabled globally. This can be overriden on query level
+    * @param {retryAttempts} retryAttempts - Number of retry attempts when error occures
     */
     function DeliveryClientConfig(projectId, typeResolvers, options) {
         this.projectId = projectId;
@@ -5916,20 +1059,61 @@ var DeliveryClientConfig = /** @class */ (function () {
         * Indicates if advanced (developer's) issues are logged in console. Enable for development and disable in production
         */
         this.enableAdvancedLogging = true;
+        /**
+        * Indicates if preview mode is enabled globally
+        */
+        this.enablePreviewMode = false;
+        /**
+       * Indicates if secured mode is enabled globally
+       */
+        this.enableSecuredMode = false;
         if (!projectId) {
             throw Error("Cannot create delivery configuration without 'projectId'");
         }
         if (!typeResolvers) {
             throw Error("Cannot create delivery configuration without specifying 'typeResolvers'");
         }
-        if (options)
+        if (options) {
             Object.assign(this, options);
+        }
     }
     return DeliveryClientConfig;
 }());
 exports.DeliveryClientConfig = DeliveryClientConfig;
 
-},{}],35:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+require("reflect-metadata");
+var FieldDecorators;
+(function (FieldDecorators) {
+    var codenameMetadataKey = Symbol('codename');
+    var generateKey = function (name) {
+        return codenameMetadataKey.toString() + ":" + name;
+    };
+    /**
+     * Get the metadata entry saved by the decorator
+     * @param target - object instance
+     * @param fieldName - field name (code name from Kentico Cloud)
+     */
+    function getPropertyName(target, fieldName) {
+        return Reflect.getMetadata(generateKey(fieldName), target);
+    }
+    FieldDecorators.getPropertyName = getPropertyName;
+    /**
+     * Decorator - reates metadata entry for the @target - Value is the property name.
+     * This will then be retrieved in the FieldMap service when resolving the field name
+     * @param value - field code name
+     */
+    function codename(value) {
+        return function (target, propertyKey) {
+            Reflect.defineMetadata(generateKey(value), propertyKey, target);
+        };
+    }
+    FieldDecorators.codename = codename;
+})(FieldDecorators = exports.FieldDecorators || (exports.FieldDecorators = {}));
+
+},{"reflect-metadata":85}],9:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var FieldModels;
@@ -5982,29 +1166,9 @@ var FieldModels;
         return TaxonomyTerm;
     }());
     FieldModels.TaxonomyTerm = TaxonomyTerm;
-    var Parse5Node = /** @class */ (function () {
-        function Parse5Node(nodeName, parentNode, value, tagName, childNodes, attrs) {
-            this.nodeName = nodeName;
-            this.parentNode = parentNode;
-            this.value = value;
-            this.tagName = tagName;
-            this.childNodes = childNodes;
-            this.attrs = attrs;
-        }
-        return Parse5Node;
-    }());
-    FieldModels.Parse5Node = Parse5Node;
-    var Parse5Attribute = /** @class */ (function () {
-        function Parse5Attribute(name, value) {
-            this.name = name;
-            this.value = value;
-        }
-        return Parse5Attribute;
-    }());
-    FieldModels.Parse5Attribute = Parse5Attribute;
 })(FieldModels = exports.FieldModels || (exports.FieldModels = {}));
 
-},{}],36:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 /**
@@ -6017,20 +1181,20 @@ var FieldType = /** @class */ (function () {
     FieldType.prototype.toString = function () {
         return this.type;
     };
-    FieldType.text = new FieldType("text");
-    FieldType.number = new FieldType("number");
-    FieldType.modular_content = new FieldType("modular_content");
-    FieldType.asset = new FieldType("asset");
-    FieldType.datetime = new FieldType("date_time");
-    FieldType.rich_text = new FieldType("rich_text");
-    FieldType.multiple_choice = new FieldType("multiple_choice");
-    FieldType.url_slug = new FieldType("url_slug");
-    FieldType.taxonomy = new FieldType("taxonomy");
+    FieldType.text = new FieldType('text');
+    FieldType.number = new FieldType('number');
+    FieldType.modular_content = new FieldType('modular_content');
+    FieldType.asset = new FieldType('asset');
+    FieldType.datetime = new FieldType('date_time');
+    FieldType.rich_text = new FieldType('rich_text');
+    FieldType.multiple_choice = new FieldType('multiple_choice');
+    FieldType.url_slug = new FieldType('url_slug');
+    FieldType.taxonomy = new FieldType('taxonomy');
     return FieldType;
 }());
 exports.FieldType = FieldType;
 
-},{}],37:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var field_type_1 = require("./field-type");
@@ -6078,13 +1242,11 @@ var Fields;
             * Type of the field
             */
             this.type = field_type_1.FieldType.multiple_choice;
-            if (this.value) {
-                if (Array.isArray(this.value)) {
-                    this.value.forEach(function (option) {
-                        var optionTemp = option;
-                        _this.options.push(new field_models_1.FieldModels.MultipleChoiceOption(optionTemp.name, optionTemp.codename));
-                    });
-                }
+            if (this.value && Array.isArray(this.value)) {
+                this.value.forEach(function (option) {
+                    var optionTemp = option;
+                    _this.options.push(new field_models_1.FieldModels.MultipleChoiceOption(optionTemp.name, optionTemp.codename));
+                });
             }
         }
         ;
@@ -6245,7 +1407,7 @@ var Fields;
             }
             var url = this.linkResolver(new link_class_1.Link(this.item.system.id, this.item.system.codename, this.item.system.type, this.value));
             if (!url) {
-                console.warn("'linkResolver' is configured, but url resolved for '" + this.type + "' type was resolved to empty string");
+                console.warn("'linkResolver' is configured, but url resolved for '" + this.type + "' type and '" + this.name + "' field resolved to an null/undefined value");
                 return null;
             }
             return url;
@@ -6291,11 +1453,10 @@ var Fields;
     ;
 })(Fields = exports.Fields || (exports.Fields = {}));
 
-},{"../models/item/link.class":55,"./field-models":35,"./field-type":36,"./rich-text-resolver.class":38}],38:[function(require,module,exports){
+},{"../models/item/link.class":30,"./field-models":9,"./field-type":10,"./rich-text-resolver.class":12}],12:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// parse5 for parsing HTML
-var parse5 = require("parse5");
+var parse5 = require("parse5/lib");
 var RichTextResolver = /** @class */ (function () {
     /**
     * Rich text resolver
@@ -6341,36 +1502,36 @@ var RichTextResolver = /** @class */ (function () {
      * Rich text resolved needs to be configured either on the model or query level
      */
     RichTextResolver.prototype.resolveHtml = function () {
-        // resolve modular content nested within the rich text field 
+        // resolve modular content nested within the rich text field
         // find the all 'object' tags
         // example: <object type="application/kenticocloud" data-type="item" data-codename="geralt"></object>
         var documentFragment = parse5.parseFragment(this.html);
+        // get child nodes
+        var childeNodes = this.getChildNodes(documentFragment);
         // recursively process all child nodes
-        this.processChildNodes(documentFragment.childNodes);
-        // serliaze document go get string as HTML
+        this.processChildNodes(childeNodes);
+        // serialize document and get HTML
         var resolvedHtml = parse5.serialize(documentFragment);
         return resolvedHtml;
     };
+    RichTextResolver.prototype.getChildNodes = function (documentFragment) {
+        return documentFragment.childNodes;
+    };
     RichTextResolver.prototype.processChildNodes = function (childNodes) {
         var _this = this;
-        if (childNodes) {
-            if (!Array.isArray(childNodes)) {
-                throw Error("Cannot process modular content in 'RichTextField' because child nodes is not an array");
+        childNodes.forEach(function (node) {
+            if (node.attrs) {
+                var attributes = node.attrs;
+                // process modular content
+                _this.processModularContent(node, attributes);
+                // process link
+                _this.processLink(node, attributes);
             }
-            childNodes.forEach(function (node) {
-                if (node.attrs) {
-                    var attributes = node.attrs; // array of attributes => name/value pair
-                    // process modular content
-                    _this.processModularContent(node, attributes);
-                    // process link
-                    _this.processLink(node, attributes);
-                }
-                if (node.childNodes) {
-                    // recursively process all nodes
-                    return _this.processChildNodes(node.childNodes);
-                }
-            });
-        }
+            if (node.childNodes) {
+                // recursively process all nodes
+                return _this.processChildNodes(_this.getChildNodes(node));
+            }
+        });
     };
     RichTextResolver.prototype.processLink = function (node, attributes) {
         var _this = this;
@@ -6378,10 +1539,10 @@ var RichTextResolver = /** @class */ (function () {
             // node is not a link
             return;
         }
-        // get all links which have item it attribute, ignore all other links (they can be normal links in rich text)
+        // get all links which have item it attribute, ignore all other links (they can be regular links in rich text)
         var contentItemIdAttribute = attributes.find(function (m) { return m.name === _this.linkContentItemIdAttributeName; });
         if (!contentItemIdAttribute) {
-            // its a regular link, don't process it
+            // its either a regular link or the attribute is not defined
             return;
         }
         // get id of content item
@@ -6402,20 +1563,21 @@ var RichTextResolver = /** @class */ (function () {
             url = queryLinkResolver(link);
         }
         if (!url) {
-            // url was not resolved, try to find global resolver for this particupar type
+            // url was not resolved, try to find global resolver for this particular type
             // and apply its url resolver
             var emptyTypeItem = this.typeResolverService.createEmptyTypedObj(link.type);
             if (!emptyTypeItem) {
-                throw Error("Cannot resolve link for '" + link.type + "' type because mapping of this type failed");
+                throw Error("Cannot resolve link for '" + link.type + "' type because mapping failed (have you registered this type in your config?)");
             }
             var globalLinkResolver = emptyTypeItem.linkResolver;
             if (globalLinkResolver) {
                 url = globalLinkResolver(link);
             }
         }
+        // url still wasn't resolved
         if (!url) {
             if (this.enableAdvancedLogging) {
-                console.warn("Url for content type '" + link.type + "' with id '" + link.itemId + "' resolved to null");
+                console.warn("Url for content type '" + link.type + "' with id '" + link.itemId + "' resolved to null/undefiend");
             }
             return;
         }
@@ -6480,7 +1642,7 @@ var RichTextResolver = /** @class */ (function () {
 }());
 exports.RichTextResolver = RichTextResolver;
 
-},{"parse5":92}],39:[function(require,module,exports){
+},{"parse5/lib":73}],13:[function(require,module,exports){
 "use strict";
 /**
  * Entry point for all public Kentico Cloud Delivery APIs
@@ -6495,8 +1657,18 @@ __export(require("./config/delivery-client.config"));
 __export(require("./fields/field-types"));
 __export(require("./models/common/sort-order.enum"));
 __export(require("./fields/field-models"));
+__export(require("./fields/field-decorators"));
 __export(require("./models/common/cloud-error.class"));
 __export(require("./services/type-resolver.service"));
+__export(require("./services/http/base-response.class"));
+__export(require("./services/http/http.service"));
+__export(require("./services/query.service"));
+// filters
+__export(require("./models/common/filters"));
+// parameters
+__export(require("./models/common/parameters"));
+// common models
+__export(require("./models/common/pagination.class"));
 // items
 __export(require("./models/item/type-resolver.class"));
 __export(require("./models/item/content-item.class"));
@@ -6517,6 +1689,7 @@ __export(require("./models/taxonomy/taxonomy-group.class"));
 __export(require("./models/taxonomy/taxonomy-system-attributes.class"));
 __export(require("./models/taxonomy/taxonomy-terms.class"));
 __export(require("./query/taxonomy/taxonomy-query.class"));
+__export(require("./query/taxonomy/taxonomies-query.class"));
 // element
 __export(require("./query/element/element-query.class"));
 __export(require("./models/element/responses"));
@@ -6524,7 +1697,14 @@ __export(require("./models/element/element-query.config"));
 __export(require("./models/element/element.class"));
 __export(require("./models/element/element-option.class"));
 
-},{"./client/delivery-client":33,"./config/delivery-client.config":34,"./fields/field-models":35,"./fields/field-types":37,"./models/common/cloud-error.class":40,"./models/common/sort-order.enum":47,"./models/element/element-option.class":48,"./models/element/element-query.config":49,"./models/element/element.class":50,"./models/element/responses":51,"./models/item/content-item-system-attributes":52,"./models/item/content-item.class":53,"./models/item/item-query.config":54,"./models/item/link.class":55,"./models/item/responses":56,"./models/item/type-resolver.class":57,"./models/taxonomy/responses":58,"./models/taxonomy/taxonomy-group.class":59,"./models/taxonomy/taxonomy-system-attributes.class":61,"./models/taxonomy/taxonomy-terms.class":62,"./models/type/content-type.class":65,"./models/type/responses":66,"./query/element/element-query.class":69,"./query/item/multiple-item-query.class":71,"./query/item/single-item-query.class":72,"./query/taxonomy/taxonomy-query.class":75,"./query/type/multiple-type-query.class":77,"./query/type/single-type-query.class":78,"./services/type-resolver.service":86}],40:[function(require,module,exports){
+},{"./client/delivery-client":6,"./config/delivery-client.config":7,"./fields/field-decorators":8,"./fields/field-models":9,"./fields/field-types":11,"./models/common/cloud-error.class":15,"./models/common/filters":17,"./models/common/pagination.class":19,"./models/common/parameters":20,"./models/common/sort-order.enum":22,"./models/element/element-option.class":23,"./models/element/element-query.config":24,"./models/element/element.class":25,"./models/element/responses":26,"./models/item/content-item-system-attributes":27,"./models/item/content-item.class":28,"./models/item/item-query.config":29,"./models/item/link.class":30,"./models/item/responses":31,"./models/item/type-resolver.class":32,"./models/taxonomy/responses":33,"./models/taxonomy/taxonomy-group.class":34,"./models/taxonomy/taxonomy-system-attributes.class":36,"./models/taxonomy/taxonomy-terms.class":37,"./models/type/content-type.class":40,"./models/type/responses":41,"./query/element/element-query.class":44,"./query/item/multiple-item-query.class":46,"./query/item/single-item-query.class":47,"./query/taxonomy/taxonomies-query.class":49,"./query/taxonomy/taxonomy-query.class":50,"./query/type/multiple-type-query.class":52,"./query/type/single-type-query.class":53,"./services/http/base-response.class":57,"./services/http/http.service":58,"./services/query.service":60,"./services/type-resolver.service":64}],14:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.version = '2.5.3';
+exports.packageId = 'kentico-cloud-delivery-typescript-sdk';
+exports.repoHost = 'npmjs.com';
+
+},{}],15:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var CloudError = /** @class */ (function () {
@@ -6539,34 +1719,58 @@ var CloudError = /** @class */ (function () {
 }());
 exports.CloudError = CloudError;
 
-},{}],41:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
-var Rx_1 = require("rxjs/Rx");
-var CloudResponseDebug = /** @class */ (function (_super) {
-    __extends(CloudResponseDebug, _super);
-    function CloudResponseDebug(ajaxResponse) {
-        return _super.call(this, ajaxResponse.originalEvent, ajaxResponse.xhr, ajaxResponse.request) || this;
+var CloudResponseDebug = /** @class */ (function () {
+    function CloudResponseDebug(rawResponse) {
+        this.rawResponse = rawResponse;
     }
     return CloudResponseDebug;
-}(Rx_1.AjaxResponse));
+}());
 exports.CloudResponseDebug = CloudResponseDebug;
 
-},{"rxjs/Rx":118}],42:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Filters;
 (function (Filters) {
+    var valueSeparator = ',';
+    var defaultValue = '';
+    var TypeFilter = /** @class */ (function () {
+        function TypeFilter(type) {
+            this.type = type;
+        }
+        TypeFilter.prototype.getParam = function () {
+            if (Array.isArray(this.type)) {
+                // multiple types
+                return 'system.type[in]';
+            }
+            // single type
+            return 'system.type';
+        };
+        TypeFilter.prototype.getParamValue = function () {
+            if (!this.type) {
+                return defaultValue;
+            }
+            if (Array.isArray(this.type)) {
+                var value = '';
+                // use [in] filter
+                for (var i = 0; i < this.type.length; i++) {
+                    value = value + this.type[i].toString();
+                    if (i !== this.type.length - 1) {
+                        // append separator if its not last item
+                        value = value + valueSeparator;
+                    }
+                }
+                return value;
+            }
+            // single type was given
+            return this.type.toString();
+        };
+        return TypeFilter;
+    }());
+    Filters.TypeFilter = TypeFilter;
     var EqualsFilter = /** @class */ (function () {
         function EqualsFilter(field, value) {
             this.field = field;
@@ -6575,12 +1779,12 @@ var Filters;
                 throw Error("Field specified in 'EqualsFilter' is null or empty");
             }
         }
-        EqualsFilter.prototype.GetParam = function () {
+        EqualsFilter.prototype.getParam = function () {
             return this.field.trim();
         };
-        EqualsFilter.prototype.GetParamValue = function () {
+        EqualsFilter.prototype.getParamValue = function () {
             if (!this.value) {
-                return null;
+                return defaultValue;
             }
             return this.value;
         };
@@ -6595,12 +1799,12 @@ var Filters;
                 throw Error("Field specified in 'AllFilter' is null or empty");
             }
         }
-        AllFilter.prototype.GetParam = function () {
+        AllFilter.prototype.getParam = function () {
             return this.field.trim() + "[all]";
         };
-        AllFilter.prototype.GetParamValue = function () {
-            if (!this.values) {
-                return null;
+        AllFilter.prototype.getParamValue = function () {
+            if (!this.values || !Array.isArray(this.values)) {
+                return defaultValue;
             }
             return this.values.map(function (m) { return m.trim(); }).join(',');
         };
@@ -6615,12 +1819,12 @@ var Filters;
                 throw Error("Field specified in 'AnyFilter' is null or empty");
             }
         }
-        AnyFilter.prototype.GetParam = function () {
+        AnyFilter.prototype.getParam = function () {
             return this.field.trim() + "[any]";
         };
-        AnyFilter.prototype.GetParamValue = function () {
-            if (!this.values) {
-                return null;
+        AnyFilter.prototype.getParamValue = function () {
+            if (!this.values || !Array.isArray(this.values)) {
+                return defaultValue;
             }
             return this.values.map(function (m) { return m.trim(); }).join(',');
         };
@@ -6635,12 +1839,12 @@ var Filters;
                 throw Error("Field specified in 'ContainsFilter' is null or empty");
             }
         }
-        ContainsFilter.prototype.GetParam = function () {
+        ContainsFilter.prototype.getParam = function () {
             return this.field.trim() + "[contains]";
         };
-        ContainsFilter.prototype.GetParamValue = function () {
-            if (!this.values) {
-                return null;
+        ContainsFilter.prototype.getParamValue = function () {
+            if (!this.values || !Array.isArray(this.values)) {
+                return defaultValue;
             }
             return this.values.map(function (m) { return m.trim(); }).join(',');
         };
@@ -6655,12 +1859,12 @@ var Filters;
                 throw Error("Field specified in 'GreaterThanFilter' is null or empty");
             }
         }
-        GreaterThanFilter.prototype.GetParam = function () {
+        GreaterThanFilter.prototype.getParam = function () {
             return this.field.trim() + "[gt]";
         };
-        GreaterThanFilter.prototype.GetParamValue = function () {
+        GreaterThanFilter.prototype.getParamValue = function () {
             if (!this.value) {
-                return null;
+                return defaultValue;
             }
             return this.value;
         };
@@ -6671,16 +1875,16 @@ var Filters;
         function GreaterThanOrEqualFilter(field, value) {
             this.field = field;
             this.value = value;
-            if (!this.field.trim) {
+            if (!this.field) {
                 throw Error("Field specified in 'GreaterThanOrEqualFilter' is null or empty");
             }
         }
-        GreaterThanOrEqualFilter.prototype.GetParam = function () {
+        GreaterThanOrEqualFilter.prototype.getParam = function () {
             return this.field.trim() + "[gte]";
         };
-        GreaterThanOrEqualFilter.prototype.GetParamValue = function () {
+        GreaterThanOrEqualFilter.prototype.getParamValue = function () {
             if (!this.value) {
-                return null;
+                return defaultValue;
             }
             return this.value;
         };
@@ -6695,17 +1899,14 @@ var Filters;
                 throw Error("Field specified in 'Infilter' is null or empty");
             }
         }
-        Infilter.prototype.GetParam = function () {
+        Infilter.prototype.getParam = function () {
             return this.field.trim() + "[in]";
         };
-        Infilter.prototype.GetParamValue = function () {
-            if (!this.values) {
-                return null;
+        Infilter.prototype.getParamValue = function () {
+            if (!this.values || !Array.isArray(this.values)) {
+                return defaultValue;
             }
             return this.values.map(function (m) {
-                if (!m) {
-                    throw Error("Elements in 'InFilter' cannot be null or empty");
-                }
                 return m.trim();
             }).join(',');
         };
@@ -6720,12 +1921,12 @@ var Filters;
                 throw Error("Field specified in 'LessThanFilter' is null or empty");
             }
         }
-        LessThanFilter.prototype.GetParam = function () {
+        LessThanFilter.prototype.getParam = function () {
             return this.field.trim() + "[lt]";
         };
-        LessThanFilter.prototype.GetParamValue = function () {
+        LessThanFilter.prototype.getParamValue = function () {
             if (!this.value) {
-                return null;
+                return defaultValue;
             }
             return this.value;
         };
@@ -6740,12 +1941,12 @@ var Filters;
                 throw Error("Field specified in 'LessThanOrEqualFilter' is null or empty");
             }
         }
-        LessThanOrEqualFilter.prototype.GetParam = function () {
+        LessThanOrEqualFilter.prototype.getParam = function () {
             return this.field.trim() + "[lte]";
         };
-        LessThanOrEqualFilter.prototype.GetParamValue = function () {
+        LessThanOrEqualFilter.prototype.getParamValue = function () {
             if (!this.value) {
-                return null;
+                return defaultValue;
             }
             return this.value;
         };
@@ -6764,24 +1965,26 @@ var Filters;
                 throw Error("'lowerValue' cannot be higher then 'higherValue' in 'RangeFilter'");
             }
         }
-        RangeFilter.prototype.GetParam = function () {
+        RangeFilter.prototype.getParam = function () {
             return this.field.trim() + "[range]";
         };
-        RangeFilter.prototype.GetParamValue = function () {
-            if (!this.lowerValue) {
-                return null;
+        RangeFilter.prototype.getParamValue = function () {
+            var lowerVal = defaultValue;
+            var higherVal = defaultValue;
+            if (this.lowerValue) {
+                lowerVal = this.lowerValue.toString();
             }
-            if (!this.higherValue) {
-                return null;
+            if (this.higherValue) {
+                higherVal = this.higherValue.toString();
             }
-            return this.lowerValue + "," + this.higherValue;
+            return lowerVal + "," + higherVal;
         };
         return RangeFilter;
     }());
     Filters.RangeFilter = RangeFilter;
 })(Filters = exports.Filters || (exports.Filters = {}));
 
-},{}],43:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Header = /** @class */ (function () {
@@ -6793,7 +1996,7 @@ var Header = /** @class */ (function () {
 }());
 exports.Header = Header;
 
-},{}],44:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Pagination = /** @class */ (function () {
@@ -6815,12 +2018,13 @@ var Pagination = /** @class */ (function () {
 }());
 exports.Pagination = Pagination;
 
-},{}],45:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var sort_order_enum_1 = require("./sort-order.enum");
 var Parameters;
 (function (Parameters) {
+    var defaultValue = '';
     var ElementsParameter = /** @class */ (function () {
         /**
         * Sets elements (projection) so that only certain elements from a content item are returned
@@ -6829,14 +2033,14 @@ var Parameters;
         */
         function ElementsParameter(elementCodenames) {
             this.elementCodenames = elementCodenames;
-            if (!this.elementCodenames) {
-                throw Error("'elementCodenames' are not set in 'ElementsParameter'");
-            }
         }
-        ElementsParameter.prototype.GetParam = function () {
+        ElementsParameter.prototype.getParam = function () {
             return 'elements';
         };
-        ElementsParameter.prototype.GetParamValue = function () {
+        ElementsParameter.prototype.getParamValue = function () {
+            if (!this.elementCodenames) {
+                return defaultValue;
+            }
             return this.elementCodenames.map(function (m) {
                 if (!m) {
                     throw Error("Codename of 'ElementsParameter' cannot be null or empty");
@@ -6859,10 +2063,10 @@ var Parameters;
                 throw Error("'LimitParameter' must specify a positive integer");
             }
         }
-        LimitParameter.prototype.GetParam = function () {
+        LimitParameter.prototype.getParam = function () {
             return 'limit';
         };
-        LimitParameter.prototype.GetParamValue = function () {
+        LimitParameter.prototype.getParamValue = function () {
             return this.limit.toString();
         };
         return LimitParameter;
@@ -6880,10 +2084,10 @@ var Parameters;
                 throw Error("'SkipParameter' must specify a positive integer number or zero.\"");
             }
         }
-        SkipParameter.prototype.GetParam = function () {
+        SkipParameter.prototype.getParam = function () {
             return 'skip';
         };
-        SkipParameter.prototype.GetParamValue = function () {
+        SkipParameter.prototype.getParamValue = function () {
             return this.skip.toString();
         };
         return SkipParameter;
@@ -6903,16 +2107,16 @@ var Parameters;
                 throw Error("Field specified in 'OrderParameter' is null or empty");
             }
         }
-        OrderParameter.prototype.GetParam = function () {
+        OrderParameter.prototype.getParam = function () {
             return 'order';
         };
-        OrderParameter.prototype.GetParamValue = function () {
+        OrderParameter.prototype.getParamValue = function () {
             var order;
-            if (this.sortOrder == sort_order_enum_1.SortOrder.desc) {
-                order = "desc";
+            if (this.sortOrder === sort_order_enum_1.SortOrder.desc) {
+                order = 'desc';
             }
             else {
-                order = "asc";
+                order = 'asc';
             }
             return this.field.trim() + "[" + order + "]";
         };
@@ -6933,10 +2137,10 @@ var Parameters;
                 throw Error("'DepthParameter' must specify a positive integer or zero");
             }
         }
-        DepthParameter.prototype.GetParam = function () {
+        DepthParameter.prototype.getParam = function () {
             return 'depth';
         };
-        DepthParameter.prototype.GetParamValue = function () {
+        DepthParameter.prototype.getParamValue = function () {
             return this.depth.toString();
         };
         return DepthParameter;
@@ -6954,10 +2158,10 @@ var Parameters;
                 throw Error("'LanguageParameter' must specify codename of the language");
             }
         }
-        LanguageParameter.prototype.GetParam = function () {
+        LanguageParameter.prototype.getParam = function () {
             return 'language';
         };
-        LanguageParameter.prototype.GetParamValue = function () {
+        LanguageParameter.prototype.getParamValue = function () {
             return this.languageCodename.trim().toString();
         };
         return LanguageParameter;
@@ -6965,20 +2169,21 @@ var Parameters;
     Parameters.LanguageParameter = LanguageParameter;
 })(Parameters = exports.Parameters || (exports.Parameters = {}));
 
-},{"./sort-order.enum":47}],46:[function(require,module,exports){
+},{"./sort-order.enum":22}],21:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var QueryConfig = /** @class */ (function () {
     function QueryConfig(options) {
         this.options = options;
-        if (options)
+        if (options) {
             Object.assign(this, options);
+        }
     }
     return QueryConfig;
 }());
 exports.QueryConfig = QueryConfig;
 
-},{}],47:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var SortOrder;
@@ -6987,19 +2192,19 @@ var SortOrder;
     SortOrder[SortOrder["desc"] = 1] = "desc";
 })(SortOrder = exports.SortOrder || (exports.SortOrder = {}));
 
-},{}],48:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var ElementOption = /** @class */ (function () {
     function ElementOption(
-        /**
-         * Name of the option
-         */
-        name, 
-        /**
-         * Value of the option
-         */
-        codename) {
+    /**
+     * Name of the option
+     */
+    name, 
+    /**
+     * Value of the option
+     */
+    codename) {
         this.name = name;
         this.codename = codename;
     }
@@ -7007,7 +2212,7 @@ var ElementOption = /** @class */ (function () {
 }());
 exports.ElementOption = ElementOption;
 
-},{}],49:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7032,31 +2237,31 @@ var ElementQueryConfig = /** @class */ (function (_super) {
 }(query_config_1.QueryConfig));
 exports.ElementQueryConfig = ElementQueryConfig;
 
-},{"../common/query.config":46}],50:[function(require,module,exports){
+},{"../common/query.config":21}],25:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Element = /** @class */ (function () {
     function Element(
-        /**
-         * Codename of the element
-         */
-        codename, 
-        /**
-         * Type of the element
-         */
-        type, 
-        /**
-         * Name of the element
-         */
-        name, 
-        /**
-         * Taxonomy group in case the element is a taxonomy
-         */
-        taxonomyGroup, 
-        /**
-         * Array of options if the field has some
-         */
-        options) {
+    /**
+     * Codename of the element
+     */
+    codename, 
+    /**
+     * Type of the element
+     */
+    type, 
+    /**
+     * Name of the element
+     */
+    name, 
+    /**
+     * Taxonomy group in case the element is a taxonomy
+     */
+    taxonomyGroup, 
+    /**
+     * Array of options if the field has some
+     */
+    options) {
         this.codename = codename;
         this.type = type;
         this.name = name;
@@ -7067,7 +2272,7 @@ var Element = /** @class */ (function () {
 }());
 exports.Element = Element;
 
-},{}],51:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var ElementResponses;
@@ -7089,39 +2294,39 @@ var ElementResponses;
     ElementResponses.ElementResponse = ElementResponse;
 })(ElementResponses = exports.ElementResponses || (exports.ElementResponses = {}));
 
-},{}],52:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var ContentItemSystemAttributes = /** @class */ (function () {
     function ContentItemSystemAttributes(
-        /**
-         * Id of the item
-         */
-        id, 
-        /**
-         * Name of the item
-         */
-        name, 
-        /**
-         * Codename of the item
-         */
-        codename, 
-        /**
-         * Codename of the type this item is using
-         */
-        type, 
-        /**
-         * Date when the item was last modified
-         */
-        last_modified, 
-        /**
-         * Codename of the language
-         */
-        language, 
-        /**
-         * Array of sitemap locatoins
-         */
-        sitemap_locations) {
+    /**
+     * Id of the item
+     */
+    id, 
+    /**
+     * Name of the item
+     */
+    name, 
+    /**
+     * Codename of the item
+     */
+    codename, 
+    /**
+     * Codename of the type this item is using
+     */
+    type, 
+    /**
+     * Date when the item was last modified
+     */
+    last_modified, 
+    /**
+     * Codename of the language
+     */
+    language, 
+    /**
+     * Array of sitemap locatoins
+     */
+    sitemap_locations) {
         this.id = id;
         this.name = name;
         this.codename = codename;
@@ -7134,7 +2339,7 @@ var ContentItemSystemAttributes = /** @class */ (function () {
 }());
 exports.ContentItemSystemAttributes = ContentItemSystemAttributes;
 
-},{}],53:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var ContentItem = /** @class */ (function () {
@@ -7147,14 +2352,15 @@ var ContentItem = /** @class */ (function () {
     */
     function ContentItem(options) {
         this.options = options;
-        if (options)
+        if (options) {
             Object.assign(this, options);
+        }
     }
     return ContentItem;
 }());
 exports.ContentItem = ContentItem;
 
-},{}],54:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7180,35 +2386,36 @@ var ItemQueryConfig = /** @class */ (function (_super) {
     */
     function ItemQueryConfig(options) {
         var _this = _super.call(this, options) || this;
-        if (options)
+        if (options) {
             Object.assign(_this, options);
+        }
         return _this;
     }
     return ItemQueryConfig;
 }(query_config_1.QueryConfig));
 exports.ItemQueryConfig = ItemQueryConfig;
 
-},{"../common/query.config":46}],55:[function(require,module,exports){
+},{"../common/query.config":21}],30:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var Link = /** @class */ (function () {
     function Link(
-        /**
-         * Id of the content item
-         */
-        itemId, 
-        /**
-         * Codename of the content item
-         */
-        codename, 
-        /**
-         * Type codename of the content item
-         */
-        type, 
-        /**
-         * Url slug defined for the content item
-         */
-        url_slug) {
+    /**
+     * Id of the content item
+     */
+    itemId, 
+    /**
+     * Codename of the content item
+     */
+    codename, 
+    /**
+     * Type codename of the content item
+     */
+    type, 
+    /**
+     * Url slug defined for the content item
+     */
+    url_slug) {
         this.itemId = itemId;
         this.codename = codename;
         this.type = type;
@@ -7218,7 +2425,7 @@ var Link = /** @class */ (function () {
 }());
 exports.Link = Link;
 
-},{}],56:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var ItemResponses;
@@ -7284,7 +2491,7 @@ var ItemResponses;
     ItemResponses.DeliveryItemResponse = DeliveryItemResponse;
 })(ItemResponses = exports.ItemResponses || (exports.ItemResponses = {}));
 
-},{}],57:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TypeResolver = /** @class */ (function () {
@@ -7304,21 +2511,21 @@ var TypeResolver = /** @class */ (function () {
 }());
 exports.TypeResolver = TypeResolver;
 
-},{}],58:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TaxonomyResponses;
 (function (TaxonomyResponses) {
     var TaxonomyResponse = /** @class */ (function () {
         function TaxonomyResponse(
-            /**
-             * Taxonomy group
-             */
-            taxonomy, 
-            /**
-             * Debug information
-             */
-            debug) {
+        /**
+         * Taxonomy group
+         */
+        taxonomy, 
+        /**
+         * Debug information
+         */
+        debug) {
             this.taxonomy = taxonomy;
             this.debug = debug;
         }
@@ -7327,15 +2534,20 @@ var TaxonomyResponses;
     TaxonomyResponses.TaxonomyResponse = TaxonomyResponse;
     var TaxonomiesResponse = /** @class */ (function () {
         function TaxonomiesResponse(
-            /**
-             * Taxonomies
-             */
-            taxonomies, 
-            /**
-             * Debug information
-             */
-            debug) {
+        /**
+         * Taxonomies
+         */
+        taxonomies, 
+        /**
+         * Pagination
+         */
+        pagination, 
+        /**
+         * Debug information
+         */
+        debug) {
             this.taxonomies = taxonomies;
+            this.pagination = pagination;
             this.debug = debug;
         }
         return TaxonomiesResponse;
@@ -7343,7 +2555,7 @@ var TaxonomyResponses;
     TaxonomyResponses.TaxonomiesResponse = TaxonomiesResponse;
 })(TaxonomyResponses = exports.TaxonomyResponses || (exports.TaxonomyResponses = {}));
 
-},{}],59:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TaxonomyGroup = /** @class */ (function () {
@@ -7355,7 +2567,7 @@ var TaxonomyGroup = /** @class */ (function () {
 }());
 exports.TaxonomyGroup = TaxonomyGroup;
 
-},{}],60:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7380,7 +2592,7 @@ var TaxonomyQueryConfig = /** @class */ (function (_super) {
 }(query_config_1.QueryConfig));
 exports.TaxonomyQueryConfig = TaxonomyQueryConfig;
 
-},{"../common/query.config":46}],61:[function(require,module,exports){
+},{"../common/query.config":21}],36:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TaxonomySystemAttributes = /** @class */ (function () {
@@ -7394,7 +2606,7 @@ var TaxonomySystemAttributes = /** @class */ (function () {
 }());
 exports.TaxonomySystemAttributes = TaxonomySystemAttributes;
 
-},{}],62:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TaxonomyTerms = /** @class */ (function () {
@@ -7407,7 +2619,7 @@ var TaxonomyTerms = /** @class */ (function () {
 }());
 exports.TaxonomyTerms = TaxonomyTerms;
 
-},{}],63:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7432,27 +2644,27 @@ var ContentTypeQueryConfig = /** @class */ (function (_super) {
 }(query_config_1.QueryConfig));
 exports.ContentTypeQueryConfig = ContentTypeQueryConfig;
 
-},{"../common/query.config":46}],64:[function(require,module,exports){
+},{"../common/query.config":21}],39:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var ContentTypeSystemAttributes = /** @class */ (function () {
     function ContentTypeSystemAttributes(
-        /**
-         * Id of the type
-         */
-        id, 
-        /**
-         * Name of the type
-         */
-        name, 
-        /**
-         * Codename of the type
-         */
-        codename, 
-        /**
-         * Date of last modification
-         */
-        last_modified) {
+    /**
+     * Id of the type
+     */
+    id, 
+    /**
+     * Name of the type
+     */
+    name, 
+    /**
+     * Codename of the type
+     */
+    codename, 
+    /**
+     * Date of last modification
+     */
+    last_modified) {
         this.id = id;
         this.name = name;
         this.codename = codename;
@@ -7462,19 +2674,19 @@ var ContentTypeSystemAttributes = /** @class */ (function () {
 }());
 exports.ContentTypeSystemAttributes = ContentTypeSystemAttributes;
 
-},{}],65:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var ContentType = /** @class */ (function () {
     function ContentType(
-        /**
-         * Content type system attributes
-         */
-        system, 
-        /**
-         * Elements (fields) assigned to content type
-         */
-        elements) {
+    /**
+     * Content type system attributes
+     */
+    system, 
+    /**
+     * Elements (fields) assigned to content type
+     */
+    elements) {
         this.system = system;
         this.elements = elements;
     }
@@ -7482,7 +2694,7 @@ var ContentType = /** @class */ (function () {
 }());
 exports.ContentType = ContentType;
 
-},{}],66:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var TypeResponses;
@@ -7517,33 +2729,27 @@ var TypeResponses;
     TypeResponses.DeliveryTypeResponse = DeliveryTypeResponse;
 })(TypeResponses = exports.TypeResponses || (exports.TypeResponses = {}));
 
-},{}],67:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
-// services
-var query_service_1 = require("../../services/query.service");
-var BaseQuery = /** @class */ (function (_super) {
-    __extends(BaseQuery, _super);
-    function BaseQuery(config) {
-        var _this = _super.call(this, config) || this;
-        _this.config = config;
-        return _this;
+var BaseQuery = /** @class */ (function () {
+    function BaseQuery(config, queryService) {
+        this.config = config;
+        this.queryService = queryService;
+        this.parameters = [];
     }
+    BaseQuery.prototype.getParameters = function () {
+        return this.parameters;
+    };
+    BaseQuery.prototype.getPromise = function () {
+        this.getParameters().find(function (m) { return m.getParam() === 'language'; });
+        return this.get().toPromise();
+    };
     return BaseQuery;
-}(query_service_1.QueryService));
+}());
 exports.BaseQuery = BaseQuery;
 
-},{"../../services/query.service":82}],68:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7557,14 +2763,13 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var element_query_config_1 = require("../../models/element/element-query.config");
-// base query
 var base_query_class_1 = require("../common/base-query.class");
 var BaseElementQuery = /** @class */ (function (_super) {
     __extends(BaseElementQuery, _super);
-    function BaseElementQuery(config) {
-        var _this = _super.call(this, config) || this;
+    function BaseElementQuery(config, queryService) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
-        _this.parameters = [];
+        _this.queryService = queryService;
         _this._queryConfig = new element_query_config_1.ElementQueryConfig();
         return _this;
     }
@@ -7580,26 +2785,20 @@ var BaseElementQuery = /** @class */ (function (_super) {
      * Gets headers used by this query
      */
     BaseElementQuery.prototype.getHeaders = function () {
-        return _super.prototype.getHeaders.call(this, this._queryConfig);
+        return this.queryService.getHeaders(this._queryConfig);
     };
     BaseElementQuery.prototype.getElementQueryUrl = function (typeCodename, elementCodename) {
-        if (!typeCodename) {
-            throw Error("Type codename has to be set in order to fetch content type element");
-        }
-        if (!elementCodename) {
-            throw Error("Type element's codename has to be set in order to fetch content type element");
-        }
         var action = '/types/' + typeCodename + '/elements/' + elementCodename;
-        return this.getUrl(action, this._queryConfig, this.parameters);
+        return this.queryService.getUrl(action, this._queryConfig, _super.prototype.getParameters.call(this));
     };
     BaseElementQuery.prototype.runElementQuery = function (typeCodename, elementCodename) {
-        return _super.prototype.getElement.call(this, this.getElementQueryUrl(typeCodename, elementCodename), this._queryConfig);
+        return this.queryService.getElement(this.getElementQueryUrl(typeCodename, elementCodename), this._queryConfig);
     };
     return BaseElementQuery;
 }(base_query_class_1.BaseQuery));
 exports.BaseElementQuery = BaseElementQuery;
 
-},{"../../models/element/element-query.config":49,"../common/base-query.class":67}],69:[function(require,module,exports){
+},{"../../models/element/element-query.config":24,"../common/base-query.class":42}],44:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7615,9 +2814,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var base_element_query_class_1 = require("./base-element-query.class");
 var ElementQuery = /** @class */ (function (_super) {
     __extends(ElementQuery, _super);
-    function ElementQuery(config, typeCodename, elementCodename) {
-        var _this = _super.call(this, config) || this;
+    function ElementQuery(config, queryService, typeCodename, elementCodename) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         _this.typeCodename = typeCodename;
         _this.elementCodename = elementCodename;
         if (!typeCodename) {
@@ -7644,7 +2844,7 @@ var ElementQuery = /** @class */ (function (_super) {
 }(base_element_query_class_1.BaseElementQuery));
 exports.ElementQuery = ElementQuery;
 
-},{"./base-element-query.class":68}],70:[function(require,module,exports){
+},{"./base-element-query.class":43}],45:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7657,19 +2857,15 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// filters
-var filters_1 = require("../../models/common/filters");
-var item_query_config_1 = require("../../models/item/item-query.config");
-// base query
-var base_query_class_1 = require("../common/base-query.class");
-// query params
 var parameters_1 = require("../../models/common/parameters");
+var item_query_config_1 = require("../../models/item/item-query.config");
+var base_query_class_1 = require("../common/base-query.class");
 var BaseItemQuery = /** @class */ (function (_super) {
     __extends(BaseItemQuery, _super);
-    function BaseItemQuery(config) {
-        var _this = _super.call(this, config) || this;
+    function BaseItemQuery(config, queryService) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
-        _this.parameters = [];
+        _this.queryService = queryService;
         return _this;
     }
     /**
@@ -7684,7 +2880,7 @@ var BaseItemQuery = /** @class */ (function (_super) {
     * Gets headers used by this query
     */
     BaseItemQuery.prototype.getHeaders = function () {
-        return _super.prototype.getHeaders.call(this, this.getQueryConfig());
+        return this.queryService.getHeaders(this.getQueryConfig());
     };
     // shared parameters
     /**
@@ -7720,32 +2916,28 @@ var BaseItemQuery = /** @class */ (function (_super) {
     };
     BaseItemQuery.prototype.getMultipleItemsQueryUrl = function () {
         var action = '/items';
-        // get all items of all types when no type is specified
-        if (this._contentType) {
-            this.parameters.push(new filters_1.Filters.EqualsFilter("system.type", this._contentType));
-        }
         // add default language is necessry
         this.processDefaultLanguageParameter();
-        return this.getUrl(action, this.getQueryConfig(), this.parameters);
+        return this.queryService.getUrl(action, this.getQueryConfig(), this.getParameters());
     };
     BaseItemQuery.prototype.getSingleItemQueryUrl = function (codename) {
         var action = '/items/' + codename;
         // add default language is necessry
         this.processDefaultLanguageParameter();
-        return this.getUrl(action, this.getQueryConfig(), this.parameters);
+        return this.queryService.getUrl(action, this.getQueryConfig(), this.getParameters());
     };
     BaseItemQuery.prototype.runMultipleItemsQuery = function () {
         var url = this.getMultipleItemsQueryUrl();
-        return _super.prototype.getMultipleItems.call(this, url, this.getQueryConfig());
+        return this.queryService.getMultipleItems(url, this.getQueryConfig());
     };
     BaseItemQuery.prototype.runSingleItemQuery = function (codename) {
         var url = this.getSingleItemQueryUrl(codename);
-        return _super.prototype.getSingleItem.call(this, url, this.getQueryConfig());
+        return this.queryService.getSingleItem(url, this.getQueryConfig());
     };
     BaseItemQuery.prototype.processDefaultLanguageParameter = function () {
         // add default language if none is specified && default language is specified globally
         if (this.config.defaultLanguage) {
-            var languageParameter = this.parameters.find(function (m) { return m.GetParam() === 'language'; });
+            var languageParameter = this.getParameters().find(function (m) { return m.getParam() === 'language'; });
             if (!languageParameter) {
                 // language parameter was not specified in query, use globally defined language
                 this.parameters.push(new parameters_1.Parameters.LanguageParameter(this.config.defaultLanguage));
@@ -7756,7 +2948,7 @@ var BaseItemQuery = /** @class */ (function (_super) {
 }(base_query_class_1.BaseQuery));
 exports.BaseItemQuery = BaseItemQuery;
 
-},{"../../models/common/filters":42,"../../models/common/parameters":45,"../../models/item/item-query.config":54,"../common/base-query.class":67}],71:[function(require,module,exports){
+},{"../../models/common/parameters":20,"../../models/item/item-query.config":29,"../common/base-query.class":42}],46:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7769,17 +2961,15 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// filters
 var filters_1 = require("../../models/common/filters");
-// query params
 var parameters_1 = require("../../models/common/parameters");
-// base query
 var base_item_query_class_1 = require("./base-item-query.class");
 var MultipleItemQuery = /** @class */ (function (_super) {
     __extends(MultipleItemQuery, _super);
-    function MultipleItemQuery(config) {
-        var _this = _super.call(this, config) || this;
+    function MultipleItemQuery(config, queryService) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         return _this;
     }
     // type
@@ -7788,10 +2978,16 @@ var MultipleItemQuery = /** @class */ (function (_super) {
      * @param type Codename of type to get
      */
     MultipleItemQuery.prototype.type = function (type) {
-        if (!type) {
-            throw Error("'type' cannot be null or empty");
-        }
-        this._contentType = type;
+        this.parameters.push(new filters_1.Filters.TypeFilter(type));
+        return this;
+    };
+    /**
+     * Gets items of given types (logical or)
+     * I.e. get items of either 'Actor' or 'Movie' type
+     * @param types Types to get
+     */
+    MultipleItemQuery.prototype.types = function (types) {
+        this.parameters.push(new filters_1.Filters.TypeFilter(types));
         return this;
     };
     // filters
@@ -7868,16 +3064,14 @@ var MultipleItemQuery = /** @class */ (function (_super) {
         return this;
     };
     /**
-     *
      * @param field Element to filter.
-     * @param value
+     * @param value Value
      */
     MultipleItemQuery.prototype.lessThanOrEqualFilter = function (field, value) {
         this.parameters.push(new filters_1.Filters.LessThanOrEqualFilter(field, value));
         return this;
     };
     /**
-     *
      * @param field Element to filter.
      * @param lowerValue Lower value of range (e.g. 2)
      * @param higherValue Higher value of range (e.g. 10)
@@ -7927,7 +3121,7 @@ var MultipleItemQuery = /** @class */ (function (_super) {
 }(base_item_query_class_1.BaseItemQuery));
 exports.MultipleItemQuery = MultipleItemQuery;
 
-},{"../../models/common/filters":42,"../../models/common/parameters":45,"./base-item-query.class":70}],72:[function(require,module,exports){
+},{"../../models/common/filters":17,"../../models/common/parameters":20,"./base-item-query.class":45}],47:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7940,13 +3134,13 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// services
 var base_item_query_class_1 = require("./base-item-query.class");
 var SingleItemQuery = /** @class */ (function (_super) {
     __extends(SingleItemQuery, _super);
-    function SingleItemQuery(config, codename) {
-        var _this = _super.call(this, config) || this;
+    function SingleItemQuery(config, queryService, codename) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         _this.codename = codename;
         if (!codename) {
             throw Error("'codename' has to be configured for 'SingleItemQuery' query");
@@ -7969,7 +3163,7 @@ var SingleItemQuery = /** @class */ (function (_super) {
 }(base_item_query_class_1.BaseItemQuery));
 exports.SingleItemQuery = SingleItemQuery;
 
-},{"./base-item-query.class":70}],73:[function(require,module,exports){
+},{"./base-item-query.class":45}],48:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -7983,21 +3177,17 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var taxonomy_query_config_1 = require("../../models/taxonomy/taxonomy-query.config");
-// base query
 var base_query_class_1 = require("../common/base-query.class");
 var BaseTaxonomyQuery = /** @class */ (function (_super) {
     __extends(BaseTaxonomyQuery, _super);
-    function BaseTaxonomyQuery(config) {
-        var _this = _super.call(this, config) || this;
+    function BaseTaxonomyQuery(config, queryService) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         /**
          * Taxonomies endpoint URL action
          */
         _this.taxonomiesEndpoint = 'taxonomies';
-        /**
-         * Query parameters
-         */
-        _this.parameters = [];
         /**
          * Query configuration
          */
@@ -8016,27 +3206,27 @@ var BaseTaxonomyQuery = /** @class */ (function (_super) {
      * Gets headers used by this query
      */
     BaseTaxonomyQuery.prototype.getHeaders = function () {
-        return _super.prototype.getHeaders.call(this, this._queryConfig);
+        return this.queryService.getHeaders(this._queryConfig);
     };
     BaseTaxonomyQuery.prototype.getTaxonomyQueryUrl = function (taxonomyCodename) {
         var action = '/' + this.taxonomiesEndpoint + '/' + taxonomyCodename;
-        return this.getUrl(action, this._queryConfig, this.parameters);
+        return this.queryService.getUrl(action, this._queryConfig, this.getParameters());
     };
     BaseTaxonomyQuery.prototype.getTaxonomiesQueryUrl = function () {
         var action = '/' + this.taxonomiesEndpoint;
-        return this.getUrl(action, this._queryConfig, this.parameters);
+        return this.queryService.getUrl(action, this._queryConfig, this.getParameters());
     };
     BaseTaxonomyQuery.prototype.runTaxonomyQuery = function (codename) {
-        return _super.prototype.getTaxonomy.call(this, this.getTaxonomyQueryUrl(codename), this._queryConfig);
+        return this.queryService.getTaxonomy(this.getTaxonomyQueryUrl(codename), this._queryConfig);
     };
     BaseTaxonomyQuery.prototype.runTaxonomiesQuery = function () {
-        return _super.prototype.getTaxonomies.call(this, this.getTaxonomiesQueryUrl(), this._queryConfig);
+        return this.queryService.getTaxonomies(this.getTaxonomiesQueryUrl(), this._queryConfig);
     };
     return BaseTaxonomyQuery;
 }(base_query_class_1.BaseQuery));
 exports.BaseTaxonomyQuery = BaseTaxonomyQuery;
 
-},{"../../models/taxonomy/taxonomy-query.config":60,"../common/base-query.class":67}],74:[function(require,module,exports){
+},{"../../models/taxonomy/taxonomy-query.config":35,"../common/base-query.class":42}],49:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -8049,15 +3239,14 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// base query
-var base_taxonomy_query_class_1 = require("./base-taxonomy-query.class");
-// query params
 var parameters_1 = require("../../models/common/parameters");
+var base_taxonomy_query_class_1 = require("./base-taxonomy-query.class");
 var TaxonomiesQuery = /** @class */ (function (_super) {
     __extends(TaxonomiesQuery, _super);
-    function TaxonomiesQuery(config) {
-        var _this = _super.call(this, config) || this;
+    function TaxonomiesQuery(config, queryService) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         return _this;
     }
     /**
@@ -8093,7 +3282,7 @@ var TaxonomiesQuery = /** @class */ (function (_super) {
 }(base_taxonomy_query_class_1.BaseTaxonomyQuery));
 exports.TaxonomiesQuery = TaxonomiesQuery;
 
-},{"../../models/common/parameters":45,"./base-taxonomy-query.class":73}],75:[function(require,module,exports){
+},{"../../models/common/parameters":20,"./base-taxonomy-query.class":48}],50:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -8106,13 +3295,13 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// base query
 var base_taxonomy_query_class_1 = require("./base-taxonomy-query.class");
 var TaxonomyQuery = /** @class */ (function (_super) {
     __extends(TaxonomyQuery, _super);
-    function TaxonomyQuery(config, taxonomyCodename) {
-        var _this = _super.call(this, config) || this;
+    function TaxonomyQuery(config, queryService, taxonomyCodename) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         _this.taxonomyCodename = taxonomyCodename;
         if (!taxonomyCodename) {
             throw Error("Cannot create taxonomy query without codename of the taxonomy");
@@ -8135,7 +3324,7 @@ var TaxonomyQuery = /** @class */ (function (_super) {
 }(base_taxonomy_query_class_1.BaseTaxonomyQuery));
 exports.TaxonomyQuery = TaxonomyQuery;
 
-},{"./base-taxonomy-query.class":73}],76:[function(require,module,exports){
+},{"./base-taxonomy-query.class":48}],51:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -8149,13 +3338,13 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var content_type_query_config_1 = require("../../models/type/content-type-query.config");
-// base query
 var base_query_class_1 = require("../common/base-query.class");
 var BaseTypeQuery = /** @class */ (function (_super) {
     __extends(BaseTypeQuery, _super);
-    function BaseTypeQuery(config) {
-        var _this = _super.call(this, config) || this;
+    function BaseTypeQuery(config, queryService) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         _this.parameters = [];
         _this._queryConfig = new content_type_query_config_1.ContentTypeQueryConfig();
         return _this;
@@ -8172,27 +3361,27 @@ var BaseTypeQuery = /** @class */ (function (_super) {
      * Gets headers used by this query
      */
     BaseTypeQuery.prototype.getHeaders = function () {
-        return _super.prototype.getHeaders.call(this, this._queryConfig);
+        return this.queryService.getHeaders(this._queryConfig);
     };
     BaseTypeQuery.prototype.getSingleTypeQueryUrl = function (codename) {
         var action = '/types/' + codename;
-        return this.getUrl(action, this._queryConfig, this.parameters);
+        return this.queryService.getUrl(action, this._queryConfig, this.getParameters());
     };
     BaseTypeQuery.prototype.getMultipleTypesQueryUrl = function () {
         var action = '/types';
-        return this.getUrl(action, this._queryConfig, this.parameters);
+        return this.queryService.getUrl(action, this._queryConfig, this.getParameters());
     };
     BaseTypeQuery.prototype.runMultipleTypesQuery = function () {
-        return _super.prototype.getMultipleTypes.call(this, this.getMultipleTypesQueryUrl(), this._queryConfig);
+        return this.queryService.getMultipleTypes(this.getMultipleTypesQueryUrl(), this._queryConfig);
     };
     BaseTypeQuery.prototype.runSingleTypeQuery = function (codename) {
-        return _super.prototype.getSingleType.call(this, this.getSingleTypeQueryUrl(codename), this._queryConfig);
+        return this.queryService.getSingleType(this.getSingleTypeQueryUrl(codename), this._queryConfig);
     };
     return BaseTypeQuery;
 }(base_query_class_1.BaseQuery));
 exports.BaseTypeQuery = BaseTypeQuery;
 
-},{"../../models/type/content-type-query.config":63,"../common/base-query.class":67}],77:[function(require,module,exports){
+},{"../../models/type/content-type-query.config":38,"../common/base-query.class":42}],52:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -8205,15 +3394,14 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// query params
 var parameters_1 = require("../../models/common/parameters");
-// base query
 var base_type_query_class_1 = require("./base-type-query.class");
 var MultipleTypeQuery = /** @class */ (function (_super) {
     __extends(MultipleTypeQuery, _super);
-    function MultipleTypeQuery(config) {
-        var _this = _super.call(this, config) || this;
+    function MultipleTypeQuery(config, queryService) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         return _this;
     }
     /**
@@ -8248,7 +3436,7 @@ var MultipleTypeQuery = /** @class */ (function (_super) {
 }(base_type_query_class_1.BaseTypeQuery));
 exports.MultipleTypeQuery = MultipleTypeQuery;
 
-},{"../../models/common/parameters":45,"./base-type-query.class":76}],78:[function(require,module,exports){
+},{"../../models/common/parameters":20,"./base-type-query.class":51}],53:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -8261,13 +3449,13 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// base query
 var base_type_query_class_1 = require("./base-type-query.class");
 var SingleTypeQuery = /** @class */ (function (_super) {
     __extends(SingleTypeQuery, _super);
-    function SingleTypeQuery(config, typeCodename) {
-        var _this = _super.call(this, config) || this;
+    function SingleTypeQuery(config, queryService, typeCodename) {
+        var _this = _super.call(this, config, queryService) || this;
         _this.config = config;
+        _this.queryService = queryService;
         _this.typeCodename = typeCodename;
         if (!typeCodename) {
             throw Error("Cannot create type query without the codename of the type");
@@ -8290,7 +3478,7 @@ var SingleTypeQuery = /** @class */ (function (_super) {
 }(base_type_query_class_1.BaseTypeQuery));
 exports.SingleTypeQuery = SingleTypeQuery;
 
-},{"./base-type-query.class":76}],79:[function(require,module,exports){
+},{"./base-type-query.class":51}],54:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var element_class_1 = require("../models/element/element.class");
@@ -8307,21 +3495,17 @@ var ElementMapService = /** @class */ (function () {
 }());
 exports.ElementMapService = ElementMapService;
 
-},{"../models/element/element.class":50}],80:[function(require,module,exports){
+},{"../models/element/element.class":25}],55:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var field_decorators_1 = require("../fields/field-decorators");
 var field_type_1 = require("../fields/field-type");
 var field_types_1 = require("../fields/field-types");
-var type_resolver_service_1 = require("./type-resolver.service");
 var link_class_1 = require("../models/item/link.class");
+var type_resolver_service_1 = require("./type-resolver.service");
 var FieldMapService = /** @class */ (function () {
     function FieldMapService(config) {
         this.config = config;
-        /**
-         * Processed items contain modular items that were already processed so that we don't end up
-         * in infinite loop.
-         */
-        this.processedItems = [];
         this.typeResolverService = new type_resolver_service_1.TypeResolverService(config);
     }
     /**
@@ -8331,18 +3515,36 @@ var FieldMapService = /** @class */ (function () {
      * @param modularContent Modular content sent along with item
      * @param queryConfig Query configuration
      */
-    FieldMapService.prototype.mapFields = function (item, modularContent, queryConfig) {
+    FieldMapService.prototype.mapFields = function (item, modularContent, queryConfig, processedItems) {
         var _this = this;
-        if (item == null) {
+        if (!item) {
             throw Error("Cannot map fields because item is not defined");
         }
+        if (!item.system) {
+            throw Error("Cannot map item because it does not contain system attributes. This is an essential field and every item should have one.");
+        }
+        if (!item.elements) {
+            throw Error("Cannot map elements of item with codename '" + item.system.codename + "'");
+        }
+        if (!processedItems) {
+            throw Error("ProcessedItems need to be initialized");
+        }
+        if (!Array.isArray(processedItems)) {
+            throw Error("ProcessedItems need to be an array of 'IContentItems'");
+        }
         var properties = Object.getOwnPropertyNames(item.elements);
-        // create typed item
-        var itemTyped = this.typeResolverService.createTypedObj(item.system.type, item);
+        var itemTyped;
+        // check if resolver for this type is available
+        if (this.typeResolverService.hasTypeResolver(item.system.type)) {
+            itemTyped = this.typeResolverService.createTypedObj(item.system.type, item);
+        }
+        else {
+            itemTyped = this.typeResolverService.createContentItem(item);
+        }
         // add/taken item to processed items to avoid infinite recursion
-        var processedItem = this.processedItems.find(function (m) { return m.system.codename === item.system.codename; });
+        var processedItem = processedItems.find(function (m) { return m.system.codename === item.system.codename; });
         if (!processedItem) {
-            this.processedItems.push(itemTyped);
+            processedItems.push(itemTyped);
         }
         properties.forEach(function (fieldName) {
             var field = item.elements[fieldName];
@@ -8351,17 +3553,21 @@ var FieldMapService = /** @class */ (function () {
             if (itemTyped.propertyResolver) {
                 propertyName = itemTyped.propertyResolver(fieldName);
             }
+            // if property hasn't been resolved, try with decorator
+            if (!propertyName) {
+                propertyName = field_decorators_1.FieldDecorators.getPropertyName(itemTyped, fieldName);
+            }
             // if property name is null/empty, use elements codename
             if (!propertyName) {
                 propertyName = fieldName;
             }
-            itemTyped[propertyName] = _this.mapField(field, modularContent, itemTyped, queryConfig);
+            itemTyped[propertyName] = _this.mapField(field, modularContent, itemTyped, queryConfig, processedItems);
         });
         return itemTyped;
     };
-    FieldMapService.prototype.mapField = function (field, modularContent, item, queryConfig) {
+    FieldMapService.prototype.mapField = function (field, modularContent, item, queryConfig, processedItems) {
         if (field.type.toString() === field_type_1.FieldType.modular_content.toString()) {
-            return this.mapModularField(field, modularContent, queryConfig);
+            return this.mapModularField(field, modularContent, queryConfig, processedItems);
         }
         else if (field.type.toString() === field_type_1.FieldType.text.toString()) {
             return this.mapTextField(field);
@@ -8379,7 +3585,7 @@ var FieldMapService = /** @class */ (function () {
             return this.mapDateTimeField(field);
         }
         else if (field.type.toString() === field_type_1.FieldType.rich_text.toString()) {
-            return this.mapRichTextField(field, modularContent, queryConfig);
+            return this.mapRichTextField(field, modularContent, queryConfig, processedItems);
         }
         else if (field.type.toString() === field_type_1.FieldType.url_slug.toString()) {
             return this.mapUrlSlugField(field, item, queryConfig);
@@ -8395,22 +3601,26 @@ var FieldMapService = /** @class */ (function () {
             throw Error(err);
         }
     };
-    FieldMapService.prototype.mapRichTextField = function (field, modularContent, queryConfig) {
+    FieldMapService.prototype.mapRichTextField = function (field, modularContent, queryConfig, processedItems) {
         var _this = this;
         // get all modular content items nested in rich text
         var modularItems = [];
         if (field.modular_content) {
             if (Array.isArray(field.modular_content)) {
                 field.modular_content.forEach(function (codename) {
-                    // get modular item
-                    var modularItem = _this.mapFields(modularContent[codename], modularContent, queryConfig);
+                    // get modular item and check if it exists (it might not be included in response due to 'Depth' parameter)
+                    var modularContentItem = modularContent[codename];
+                    if (!modularContentItem) {
+                        throw Error("Modular content item with codename '" + codename + "' is not present in Delivery response.\n                        This modular item was requested by '" + field.name + "' field.\n                        Error can usually be solved by increasing 'Depth' parameter of your query.");
+                    }
+                    var modularItem = _this.mapFields(modularContent[codename], modularContent, queryConfig, processedItems);
                     if (modularItem != null) {
                         modularItems.push(modularItem);
                     }
                 });
             }
         }
-        // extract and map links 
+        // extract and map links
         var links = this.mapRichTextLinks(field.links);
         return new field_types_1.Fields.RichTextField(field.name, field.value, modularItems, links, this.typeResolverService, this.config.enableAdvancedLogging, queryConfig);
     };
@@ -8436,7 +3646,7 @@ var FieldMapService = /** @class */ (function () {
         var linkResolver = this.getLinkResolverForUrlSlugField(item, queryConfig);
         return new field_types_1.Fields.UrlSlugField(field.name, field.value, item, linkResolver, this.config.enableAdvancedLogging);
     };
-    FieldMapService.prototype.mapModularField = function (field, modularContent, queryConfig) {
+    FieldMapService.prototype.mapModularField = function (field, modularContent, queryConfig, processedItems) {
         var _this = this;
         if (!field) {
             if (this.config.enableAdvancedLogging) {
@@ -8463,14 +3673,14 @@ var FieldMapService = /** @class */ (function () {
             // try to map only if the modular item was present in response
             if (modularItem) {
                 // add/taken item to processed items to avoid infinite recursion
-                var processedItem = _this.processedItems.find(function (m) { return m.system.codename === modularItem.system.codename; });
+                var processedItem = processedItems.find(function (m) { return m.system.codename === modularItem.system.codename; });
                 if (processedItem) {
                     modularContentItems.push(processedItem);
                 }
                 else {
-                    var modularItem = _this.mapFields(modularItem, modularContent, queryConfig);
-                    modularContentItems.push(modularItem);
-                    processedItem = modularItem;
+                    var newModularItem = _this.mapFields(modularItem, modularContent, queryConfig, processedItems);
+                    modularContentItems.push(newModularItem);
+                    processedItem = newModularItem;
                 }
             }
         });
@@ -8489,7 +3699,8 @@ var FieldMapService = /** @class */ (function () {
     };
     FieldMapService.prototype.mapRichTextLinks = function (linksJson) {
         var links = [];
-        for (var linkItemId in linksJson) {
+        for (var _i = 0, _a = Object.keys(linksJson); _i < _a.length; _i++) {
+            var linkItemId = _a[_i];
             var linkRaw = linksJson[linkItemId];
             links.push(new link_class_1.Link(linkItemId, linkRaw.codename, linkRaw.type, linkRaw.url_slug));
         }
@@ -8499,7 +3710,94 @@ var FieldMapService = /** @class */ (function () {
 }());
 exports.FieldMapService = FieldMapService;
 
-},{"../fields/field-type":36,"../fields/field-types":37,"../models/item/link.class":55,"./type-resolver.service":86}],81:[function(require,module,exports){
+},{"../fields/field-decorators":8,"../fields/field-type":10,"../fields/field-types":11,"../models/item/link.class":30,"./type-resolver.service":64}],56:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var throw_1 = require("rxjs/observable/throw");
+var timer_1 = require("rxjs/observable/timer");
+var operators_1 = require("rxjs/operators");
+var RetryStrategy = /** @class */ (function () {
+    function RetryStrategy() {
+        var _this = this;
+        this.strategy = function (options) { return function (attempts) {
+            return attempts.pipe(operators_1.mergeMap(function (error, i) {
+                var retryAttempt = i + 1;
+                // if maximum number of retries have been met
+                // or response is a status code we don't wish to retry, throw error
+                if (retryAttempt > options.maxRetryAttempts ||
+                    options.excludedStatusCodes.find(function (e) { return e === error.status; })) {
+                    return throw_1._throw(error);
+                }
+                // calculate retry time
+                var retryTimeout = _this.getRetryTimeout(retryAttempt);
+                // debug log attempt
+                _this.debugLogAttempt(retryAttempt, retryTimeout);
+                return timer_1.timer(retryTimeout);
+            }));
+        }; };
+    }
+    /**
+    * Calculates retry attempt timeout in ms
+    * @param attempt Index of the attempt to calculate increasing delay when retrying
+    */
+    RetryStrategy.prototype.getRetryTimeout = function (attempt) {
+        return Math.pow(2, attempt) * 100;
+    };
+    /**
+     * Logs attempt in console.
+     * This function is also used for testing in jasmine spy
+     * @param attempt Index of attempt
+     */
+    RetryStrategy.prototype.debugLogAttempt = function (attempt, retryTimeout) {
+        console.warn("Attempt " + attempt + ": retrying in " + retryTimeout + "ms");
+    };
+    return RetryStrategy;
+}());
+exports.RetryStrategy = RetryStrategy;
+exports.retryStrategy = new RetryStrategy();
+
+},{"rxjs/observable/throw":119,"rxjs/observable/timer":120,"rxjs/operators":124}],57:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var BaseResponse = /** @class */ (function () {
+    function BaseResponse(data, response) {
+        this.data = data;
+        this.response = response;
+    }
+    return BaseResponse;
+}());
+exports.BaseResponse = BaseResponse;
+
+},{}],58:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+require("rxjs/add/operator/map");
+var ajax_1 = require("rxjs/observable/dom/ajax");
+var base_response_class_1 = require("./base-response.class");
+var HttpService = /** @class */ (function () {
+    function HttpService() {
+    }
+    HttpService.prototype.get = function (url, headers) {
+        return ajax_1.ajax.get(url, this.getHeadersJson(headers))
+            .map(function (ajaxResponse) {
+            return new base_response_class_1.BaseResponse(ajaxResponse.response, ajaxResponse);
+        });
+    };
+    HttpService.prototype.getHeadersJson = function (headers) {
+        var headerJson = {};
+        if (!headers) {
+            return headerJson;
+        }
+        headers.forEach(function (header) {
+            headerJson[header.header] = header.value;
+        });
+        return headerJson;
+    };
+    return HttpService;
+}());
+exports.HttpService = HttpService;
+
+},{"./base-response.class":57,"rxjs/add/operator/map":100,"rxjs/observable/dom/ajax":114}],59:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var field_map_service_1 = require("./field-map.service");
@@ -8510,9 +3808,9 @@ var ItemMapService = /** @class */ (function () {
     }
     ItemMapService.prototype.mapItem = function (item, modularContent, queryConfig) {
         if (item == null) {
-            throw Error("Could not map item: " + item);
+            throw Error("Could not map item because its undefined");
         }
-        return this.fieldMapService.mapFields(item, modularContent, queryConfig);
+        return this.fieldMapService.mapFields(item, modularContent, queryConfig, []);
     };
     /**
      * Maps single item to its proper strongly typed model from the given Cloud response
@@ -8537,35 +3835,55 @@ var ItemMapService = /** @class */ (function () {
 }());
 exports.ItemMapService = ItemMapService;
 
-},{"./field-map.service":80}],82:[function(require,module,exports){
+},{"./field-map.service":55}],60:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// rxjs
-var Rx_1 = require("rxjs/Rx"); // import from 'rxjs/rx' instead of 'rxjs/Observable' to include 'throw' method
-var ajax_1 = require("rxjs/observable/dom/ajax");
-var AjaxObservable_1 = require("rxjs/observable/dom/AjaxObservable");
 require("rxjs/add/operator/catch");
-require("rxjs/add/operator/map");
-require("rxjs/observable/throw");
-var header_class_1 = require("../models/common/header.class");
+require("rxjs/add/operator/retryWhen");
+var throw_1 = require("rxjs/observable/throw");
+var AjaxObservable_1 = require("rxjs/observable/dom/AjaxObservable");
 var cloud_error_class_1 = require("../models/common/cloud-error.class");
-// services
+var header_class_1 = require("../models/common/header.class");
+var retry_strategy_1 = require("./helpers/retry-strategy");
 var response_map_service_1 = require("./response-map.service");
 var QueryService = /** @class */ (function () {
     function QueryService(
-        /**
-         * Delivery client configuration
-         */
-        config) {
+    /**
+     * Delivery client configuration
+     */
+    config, 
+    /**
+     * Http service for fetching data
+     */
+    httpService, 
+    /**
+     * Information about the SDK
+     * This can contain information from both this & Node SDK for internal logging with 'SDKID' header
+     */
+    sdkInfo) {
         this.config = config;
+        this.httpService = httpService;
+        this.sdkInfo = sdkInfo;
         /**
-        * Base Url to Kentico Delivery API
-        */
-        this.baseDeliveryApiUrl = 'https://deliver.kenticocloud.com';
+         * Default number of retry attempts when user did not set any
+         */
+        this.defaultRetryAttempts = 0;
         /**
-        * Preview url to Kentico Delivery API
+         * Excluded status code from retry functionality
+         */
+        this.retryExcludedStatuses = [404, 401];
+        /**
+         * Header name for SDK usage
+         */
+        this.sdkVersionHeader = 'X-KC-SDKID';
+        /**
+        * Default base Url to Kentico Delivery API
         */
-        this.previewDeliveryApiUrl = 'https://preview-deliver.kenticocloud.com';
+        this.defaultBaseDeliveryApiUrl = 'https://deliver.kenticocloud.com';
+        /**
+        * Default preview url to Kentico Delivery API
+        */
+        this.defaultPreviewDeliveryApiUrl = 'https://preview-deliver.kenticocloud.com';
         /**
          * Name of the header used when 'wait for loading new content' feature is used
          */
@@ -8575,72 +3893,6 @@ var QueryService = /** @class */ (function () {
         }
         this.responseMapService = new response_map_service_1.ResponseMapService(config);
     }
-    /**
-     * Handles given error
-     * @param error Error to be handled
-     */
-    QueryService.prototype.handleError = function (error) {
-        if (this.config.enableAdvancedLogging) {
-            console.error(error);
-        }
-        if (error instanceof AjaxObservable_1.AjaxError) {
-            var xhrResponse = error.xhr.response;
-            if (!xhrResponse) {
-                return error;
-            }
-            // return Cloud specific error 
-            return new cloud_error_class_1.CloudError(xhrResponse.message, xhrResponse.request_id, xhrResponse.error_code, xhrResponse.specific_code, error);
-        }
-        return error;
-    };
-    /**
-     * Indicates if current query should use preview mode
-     * @param queryConfig Query configuration
-     */
-    QueryService.prototype.isPreviewModeEnabled = function (queryConfig) {
-        if (queryConfig.usePreviewMode != null) {
-            return queryConfig.usePreviewMode;
-        }
-        return this.config.enablePreviewMode === true;
-    };
-    /**
-     * Gets preview or standard URL based on client and query configuration
-     * @param queryConfig Query configuration
-     */
-    QueryService.prototype.getDeliveryUrl = function (queryConfig) {
-        if (this.isPreviewModeEnabled(queryConfig)) {
-            if (!this.config.previewApiKey) {
-                throw Error("You have to configure 'previewApiKey' to use 'preview' mode");
-            }
-            return this.previewDeliveryApiUrl;
-        }
-        return this.baseDeliveryApiUrl;
-    };
-    /**
-     * Gets base URL of the request including the project Id
-     * @param queryConfig Query configuration
-     */
-    QueryService.prototype.getBaseUrl = function (queryConfig) {
-        return this.getDeliveryUrl(queryConfig) + '/' + this.config.projectId;
-    };
-    /**
-     * Adds query parameters to given url
-     * @param url Url to which options will be added
-     * @param options Query parameters to add
-     */
-    QueryService.prototype.addOptionsToUrl = function (url, options) {
-        if (options) {
-            options.forEach(function (filter) {
-                if (url.indexOf('?') > -1) {
-                    url = url + '&' + filter.GetParam() + '=' + filter.GetParamValue();
-                }
-                else {
-                    url = url + '?' + filter.GetParam() + '=' + filter.GetParamValue();
-                }
-            });
-        }
-        return url;
-    };
     /**
      * Gets url based on the action, query configuration and options (parameters)
      * @param action Action (= url part) that will be hit
@@ -8658,11 +3910,11 @@ var QueryService = /** @class */ (function () {
     QueryService.prototype.getSingleItem = function (url, queryConfig) {
         var _this = this;
         return this.getResponse(url, queryConfig)
-            .map(function (ajaxResponse) {
-            return _this.responseMapService.mapSingleResponse(ajaxResponse, queryConfig);
+            .map(function (response) {
+            return _this.responseMapService.mapSingleResponse(response, queryConfig);
         })
             .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
+            return throw_1._throw(_this.handleError(err));
         });
     };
     /**
@@ -8673,11 +3925,11 @@ var QueryService = /** @class */ (function () {
     QueryService.prototype.getMultipleItems = function (url, queryConfig) {
         var _this = this;
         return this.getResponse(url, queryConfig)
-            .map(function (ajaxResponse) {
-            return _this.responseMapService.mapMultipleResponse(ajaxResponse, queryConfig);
+            .map(function (response) {
+            return _this.responseMapService.mapMultipleResponse(response, queryConfig);
         })
             .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
+            return throw_1._throw(_this.handleError(err));
         });
     };
     /**
@@ -8688,11 +3940,11 @@ var QueryService = /** @class */ (function () {
     QueryService.prototype.getSingleType = function (url, queryConfig) {
         var _this = this;
         return this.getResponse(url, queryConfig)
-            .map(function (ajaxResponse) {
-            return _this.responseMapService.mapSingleTypeResponse(ajaxResponse);
+            .map(function (response) {
+            return _this.responseMapService.mapSingleTypeResponse(response);
         })
             .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
+            return throw_1._throw(_this.handleError(err));
         });
     };
     /**
@@ -8703,11 +3955,11 @@ var QueryService = /** @class */ (function () {
     QueryService.prototype.getMultipleTypes = function (url, queryConfig) {
         var _this = this;
         return this.getResponse(url, queryConfig)
-            .map(function (ajaxResponse) {
-            return _this.responseMapService.mapMultipleTypeResponse(ajaxResponse);
+            .map(function (response) {
+            return _this.responseMapService.mapMultipleTypeResponse(response);
         })
             .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
+            return throw_1._throw(_this.handleError(err));
         });
     };
     /**
@@ -8718,11 +3970,11 @@ var QueryService = /** @class */ (function () {
     QueryService.prototype.getTaxonomy = function (url, queryConfig) {
         var _this = this;
         return this.getResponse(url, queryConfig)
-            .map(function (ajaxResponse) {
-            return _this.responseMapService.mapTaxonomyResponse(ajaxResponse);
+            .map(function (response) {
+            return _this.responseMapService.mapTaxonomyResponse(response);
         })
             .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
+            return throw_1._throw(_this.handleError(err));
         });
     };
     /**
@@ -8733,11 +3985,11 @@ var QueryService = /** @class */ (function () {
     QueryService.prototype.getTaxonomies = function (url, queryConfig) {
         var _this = this;
         return this.getResponse(url, queryConfig)
-            .map(function (ajaxResponse) {
-            return _this.responseMapService.mapTaxonomiesResponse(ajaxResponse);
+            .map(function (response) {
+            return _this.responseMapService.mapTaxonomiesResponse(response);
         })
             .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
+            return throw_1._throw(_this.handleError(err));
         });
     };
     /**
@@ -8748,46 +4000,31 @@ var QueryService = /** @class */ (function () {
     QueryService.prototype.getElement = function (url, queryConfig) {
         var _this = this;
         return this.getResponse(url, queryConfig)
-            .map(function (ajaxResponse) {
-            return _this.responseMapService.mapElementResponse(ajaxResponse);
+            .map(function (response) {
+            return _this.responseMapService.mapElementResponse(response);
         })
             .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
+            return throw_1._throw(_this.handleError(err));
         });
     };
     /**
-     * Gets Ajax response
-     * @param url Url to hit
-     * @param queryConfig Query configuration
-     */
-    QueryService.prototype.getResponse = function (url, queryConfig) {
-        var _this = this;
-        return ajax_1.ajax.get(url, this.getHeadersJson(queryConfig))
-            .map(function (response) { return response; })
-            .catch(function (err) {
-            return Rx_1.Observable.throw(_this.handleError(err));
-        });
-    };
-    /**
-     * Gets authorization header. This is used for 'preview' functionality
-     */
-    QueryService.prototype.getAuthorizationHeader = function () {
-        if (!this.config.previewApiKey) {
-            throw Error("Cannot get authorization header because 'previewApiKey' is not defined");
-        }
-        // authorization header required for preview mode
-        return new header_class_1.Header('authorization', "bearer " + this.config.previewApiKey);
-    };
-    /**
-     * Gets proper set of headers. For example, if the preview mode is enabled, this
-     * should return the authorization header
+     * Gets proper set of headers for given request.
      * @param queryConfig Query configuration
      */
     QueryService.prototype.getHeaders = function (queryConfig) {
         var headers = [];
+        // add SDK Id header for monitoring SDK usage
+        headers.push(this.getSdkIdHeader());
+        if (this.isPreviewModeEnabled(queryConfig) && this.isSecuredModeEnabled(queryConfig)) {
+            throw Error("Preview & secured mode cannot be used at the same time.");
+        }
         // add preview header is required
         if (this.isPreviewModeEnabled(queryConfig)) {
-            headers.push(this.getAuthorizationHeader());
+            headers.push(this.getAuthorizationHeader(this.config.previewApiKey));
+        }
+        // add secured mode header is required
+        if (this.isSecuredModeEnabled(queryConfig)) {
+            headers.push(this.getAuthorizationHeader(this.config.securedApiKey));
         }
         // add 'X-KC-Wait-For-Loading-New-Content' header if required
         if (queryConfig.waitForLoadingNewContent) {
@@ -8796,22 +4033,130 @@ var QueryService = /** @class */ (function () {
         return headers;
     };
     /**
-     * Gets the json representation of headers
+     * Handles given error
+     * @param error Error to be handled
+     */
+    QueryService.prototype.handleError = function (error) {
+        if (this.config.enableAdvancedLogging) {
+            console.error(error);
+        }
+        if (error instanceof AjaxObservable_1.AjaxError) {
+            var xhrResponse = error.xhr.response;
+            if (!xhrResponse) {
+                return error;
+            }
+            // return Cloud specific error
+            return new cloud_error_class_1.CloudError(xhrResponse.message, xhrResponse.request_id, xhrResponse.error_code, xhrResponse.specific_code, error);
+        }
+        return error;
+    };
+    /**
+     * Indicates if current query should use preview mode
      * @param queryConfig Query configuration
      */
-    QueryService.prototype.getHeadersJson = function (queryConfig) {
-        var headerJson = {};
-        var headers = this.getHeaders(queryConfig);
-        headers.forEach(function (header) {
-            headerJson[header.header] = header.value;
+    QueryService.prototype.isPreviewModeEnabled = function (queryConfig) {
+        if (queryConfig.usePreviewMode != null) {
+            return queryConfig.usePreviewMode;
+        }
+        return this.config.enablePreviewMode === true;
+    };
+    /**
+    * Indicates if current query should use secured mode
+    * @param queryConfig Query configuration
+    */
+    QueryService.prototype.isSecuredModeEnabled = function (queryConfig) {
+        if (queryConfig.useSecuredMode != null) {
+            return queryConfig.useSecuredMode;
+        }
+        return this.config.enableSecuredMode === true;
+    };
+    /**
+     * Gets preview or standard URL based on client and query configuration
+     * @param queryConfig Query configuration
+     */
+    QueryService.prototype.getDeliveryUrl = function (queryConfig) {
+        if (this.isPreviewModeEnabled(queryConfig)) {
+            if (!this.config.previewApiKey) {
+                throw Error("You have to configure 'previewApiKey' to use 'preview' mode");
+            }
+            // use custom base / preview url if its configured
+            if (this.config.basePreviewUrl) {
+                return this.config.basePreviewUrl;
+            }
+            // use default preview url
+            return this.defaultPreviewDeliveryApiUrl;
+        }
+        // use custom base / preview url if its configured
+        if (this.config.baseUrl) {
+            return this.config.baseUrl;
+        }
+        return this.defaultBaseDeliveryApiUrl;
+    };
+    /**
+     * Gets base URL of the request including the project Id
+     * @param queryConfig Query configuration
+     */
+    QueryService.prototype.getBaseUrl = function (queryConfig) {
+        return this.getDeliveryUrl(queryConfig) + '/' + this.config.projectId;
+    };
+    /**
+     * Adds query parameters to given url
+     * @param url Url to which options will be added
+     * @param options Query parameters to add
+     */
+    QueryService.prototype.addOptionsToUrl = function (url, options) {
+        if (options) {
+            options.forEach(function (filter) {
+                if (url.indexOf('?') > -1) {
+                    url = url + '&' + filter.getParam() + '=' + filter.getParamValue();
+                }
+                else {
+                    url = url + '?' + filter.getParam() + '=' + filter.getParamValue();
+                }
+            });
+        }
+        return url;
+    };
+    /**
+     * Http get response
+     * @param url Url of request
+     * @param queryConfig Query configuration
+     */
+    QueryService.prototype.getResponse = function (url, queryConfig) {
+        var _this = this;
+        // hold the attempt count
+        var attempt = 1;
+        return this.httpService.get(url, this.getHeaders(queryConfig))
+            .map(function (response) { return response; })
+            .retryWhen(retry_strategy_1.retryStrategy.strategy({
+            maxRetryAttempts: this.config.retryAttempts ? this.config.retryAttempts : this.defaultRetryAttempts,
+            excludedStatusCodes: this.retryExcludedStatuses
+        }))
+            .catch(function (err) {
+            return throw_1._throw(_this.handleError(err));
         });
-        return headerJson;
+    };
+    /**
+     * Gets authorization header. This is used for 'preview' functionality
+     */
+    QueryService.prototype.getAuthorizationHeader = function (key) {
+        if (!key) {
+            throw Error("Cannot get authorization header because key is undefined");
+        }
+        // authorization header required for preview mode
+        return new header_class_1.Header('authorization', "bearer " + key);
+    };
+    /**
+     * Header identifying SDK type & version for internal purposes of Kentico
+     */
+    QueryService.prototype.getSdkIdHeader = function () {
+        return new header_class_1.Header(this.sdkVersionHeader, this.sdkInfo.host + ";" + this.sdkInfo.name + ";" + this.sdkInfo.version);
     };
     return QueryService;
 }());
 exports.QueryService = QueryService;
 
-},{"../models/common/cloud-error.class":40,"../models/common/header.class":43,"./response-map.service":83,"rxjs/Rx":118,"rxjs/add/operator/catch":158,"rxjs/add/operator/map":191,"rxjs/observable/dom/AjaxObservable":282,"rxjs/observable/dom/ajax":284,"rxjs/observable/throw":302}],83:[function(require,module,exports){
+},{"../models/common/cloud-error.class":15,"../models/common/header.class":18,"./helpers/retry-strategy":56,"./response-map.service":61,"rxjs/add/operator/catch":99,"rxjs/add/operator/retryWhen":101,"rxjs/observable/dom/AjaxObservable":113,"rxjs/observable/throw":119}],61:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 // models
@@ -8835,92 +4180,94 @@ var ResponseMapService = /** @class */ (function () {
     }
     /**
      * Gets response for getting a single type
-     * @param ajaxResponse Response data
+     * @param response Response data
      */
-    ResponseMapService.prototype.mapSingleTypeResponse = function (ajaxResponse) {
-        var cloudResponse = ajaxResponse.response;
+    ResponseMapService.prototype.mapSingleTypeResponse = function (response) {
+        var cloudResponse = response.data;
         // map type
         var type = this.typeMapService.mapSingleType(cloudResponse);
-        return new responses_2.TypeResponses.DeliveryTypeResponse(type, this.mapResponseDebug(ajaxResponse));
+        return new responses_2.TypeResponses.DeliveryTypeResponse(type, this.mapResponseDebug(response));
     };
     /**
      * Gets resposne for getting multiple types
-     * @param ajaxResponse Response data
+     * @param response Response data
      * @param options Options
      */
-    ResponseMapService.prototype.mapMultipleTypeResponse = function (ajaxResponse) {
-        var cloudResponse = ajaxResponse.response;
+    ResponseMapService.prototype.mapMultipleTypeResponse = function (response) {
+        var cloudResponse = response.data;
         // map types
         var types = this.typeMapService.mapMultipleTypes(cloudResponse);
         // pagination
         var pagination = new pagination_class_1.Pagination(cloudResponse.pagination.skip, cloudResponse.pagination.limit, cloudResponse.pagination.count, cloudResponse.pagination.next_page);
-        return new responses_2.TypeResponses.DeliveryTypeListingResponse(types, pagination, this.mapResponseDebug(ajaxResponse));
+        return new responses_2.TypeResponses.DeliveryTypeListingResponse(types, pagination, this.mapResponseDebug(response));
     };
     /**
      * Gets response for getting single item
-     * @param ajaxResponse Response data
+     * @param response Response data
      * @param queryConfig Query configuration
      */
-    ResponseMapService.prototype.mapSingleResponse = function (ajaxResponse, queryConfig) {
-        var cloudResponse = ajaxResponse.response;
+    ResponseMapService.prototype.mapSingleResponse = function (response, queryConfig) {
+        var cloudResponse = response.data;
         // map item
         var item = this.itemMapService.mapSingleItem(cloudResponse, queryConfig);
-        return new responses_1.ItemResponses.DeliveryItemResponse(item, this.mapResponseDebug(ajaxResponse));
+        return new responses_1.ItemResponses.DeliveryItemResponse(item, this.mapResponseDebug(response));
     };
     /**
      * Gets response for getting multiple items
-     * @param ajaxResponse Response data
+     * @param response Response data
      * @param queryConfig Query configuration
      */
-    ResponseMapService.prototype.mapMultipleResponse = function (ajaxResponse, queryConfig) {
-        var cloudResponse = ajaxResponse.response;
+    ResponseMapService.prototype.mapMultipleResponse = function (response, queryConfig) {
+        var cloudResponse = response.data;
         // map items
         var items = this.itemMapService.mapMultipleItems(cloudResponse, queryConfig);
         // pagination
         var pagination = new pagination_class_1.Pagination(cloudResponse.pagination.skip, cloudResponse.pagination.limit, cloudResponse.pagination.count, cloudResponse.pagination.next_page);
-        return new responses_1.ItemResponses.DeliveryItemListingResponse(items, pagination, this.mapResponseDebug(ajaxResponse));
+        return new responses_1.ItemResponses.DeliveryItemListingResponse(items, pagination, this.mapResponseDebug(response));
     };
     /**
      * Gets response for getting single taxonomy item
-     * @param ajaxResponse Response data
+     * @param response Response data
      */
-    ResponseMapService.prototype.mapTaxonomyResponse = function (ajaxResponse) {
-        var cloudResponse = ajaxResponse.response;
-        // map taxonomy 
+    ResponseMapService.prototype.mapTaxonomyResponse = function (response) {
+        var cloudResponse = response.data;
+        // map taxonomy
         var taxonomy = this.taxonomyMapService.mapTaxonomy(cloudResponse.system, cloudResponse.terms);
-        return new responses_3.TaxonomyResponses.TaxonomyResponse(taxonomy, this.mapResponseDebug(ajaxResponse));
+        return new responses_3.TaxonomyResponses.TaxonomyResponse(taxonomy, this.mapResponseDebug(response));
     };
     /**
      * Gets response for getting multiples taxonomies
-     * @param ajaxResponse Response data
+     * @param response Response data
      */
-    ResponseMapService.prototype.mapTaxonomiesResponse = function (ajaxResponse) {
-        var cloudResponse = ajaxResponse.response;
+    ResponseMapService.prototype.mapTaxonomiesResponse = function (response) {
+        var cloudResponse = response.data;
         // map taxonomies
         var taxonomies = this.taxonomyMapService.mapTaxonomies(cloudResponse.taxonomies);
-        return new responses_3.TaxonomyResponses.TaxonomiesResponse(taxonomies, this.mapResponseDebug(ajaxResponse));
+        // pagination
+        var pagination = new pagination_class_1.Pagination(cloudResponse.pagination.skip, cloudResponse.pagination.limit, cloudResponse.pagination.count, cloudResponse.pagination.next_page);
+        return new responses_3.TaxonomyResponses.TaxonomiesResponse(taxonomies, pagination, this.mapResponseDebug(response));
     };
     /**
     * Gets response for getting single content type element
-    * @param ajaxResponse Response data
+    * @param response Response data
     */
-    ResponseMapService.prototype.mapElementResponse = function (ajaxResponse) {
-        var cloudResponse = ajaxResponse.response;
-        // map element 
+    ResponseMapService.prototype.mapElementResponse = function (response) {
+        var cloudResponse = response.data;
+        // map element
         var element = this.elementMapService.mapElement(cloudResponse);
-        return new responses_4.ElementResponses.ElementResponse(element, this.mapResponseDebug(ajaxResponse));
+        return new responses_4.ElementResponses.ElementResponse(element, this.mapResponseDebug(response));
     };
-    ResponseMapService.prototype.mapResponseDebug = function (ajaxResponse) {
-        if (!ajaxResponse) {
+    ResponseMapService.prototype.mapResponseDebug = function (response) {
+        if (!response) {
             throw Error("Cannot map 'debug' model from the response");
         }
-        return new cloud_response_debug_class_1.CloudResponseDebug(ajaxResponse);
+        return new cloud_response_debug_class_1.CloudResponseDebug(response.response);
     };
     return ResponseMapService;
 }());
 exports.ResponseMapService = ResponseMapService;
 
-},{"../models/common/cloud-response-debug.class":41,"../models/common/pagination.class":44,"../models/element/responses":51,"../models/item/responses":56,"../models/taxonomy/responses":58,"../models/type/responses":66,"./element-map.service":79,"./item-map.service":81,"./taxonomy-map.service":84,"./type-map.service":85}],84:[function(require,module,exports){
+},{"../models/common/cloud-response-debug.class":16,"../models/common/pagination.class":19,"../models/element/responses":26,"../models/item/responses":31,"../models/taxonomy/responses":33,"../models/type/responses":41,"./element-map.service":54,"./item-map.service":59,"./taxonomy-map.service":62,"./type-map.service":63}],62:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var taxonomy_system_attributes_class_1 = require("../models/taxonomy/taxonomy-system-attributes.class");
@@ -8935,6 +4282,9 @@ var TaxonomyMapService = /** @class */ (function () {
         }
         if (!taxonomyTerms) {
             throw Error("Cannot map taxonomy due to missing 'terms' property");
+        }
+        if (!Array.isArray(taxonomyTerms)) {
+            throw Error("Cannot map terms because no terms array was provided");
         }
         var mappedSystemAttributes = new taxonomy_system_attributes_class_1.TaxonomySystemAttributes(taxonomySystem.id, taxonomySystem.name, taxonomySystem.codename, taxonomySystem.last_modified);
         var mappedTerms = this.mapTaxonomyTerms(taxonomyTerms);
@@ -8960,13 +4310,7 @@ var TaxonomyMapService = /** @class */ (function () {
      */
     TaxonomyMapService.prototype.mapTaxonomyTerms = function (termsArray) {
         var _this = this;
-        if (!termsArray) {
-            throw Error("Cannot map taxonomy terms due to invalid property data");
-        }
-        if (!Array.isArray(termsArray)) {
-            throw Error("Cannot map terms because no terms array was provided");
-        }
-        if (termsArray.length == 0) {
+        if (termsArray.length === 0) {
             return [];
         }
         var mappedTermsArray = [];
@@ -8980,7 +4324,7 @@ var TaxonomyMapService = /** @class */ (function () {
 }());
 exports.TaxonomyMapService = TaxonomyMapService;
 
-},{"../models/taxonomy/taxonomy-group.class":59,"../models/taxonomy/taxonomy-system-attributes.class":61,"../models/taxonomy/taxonomy-terms.class":62}],85:[function(require,module,exports){
+},{"../models/taxonomy/taxonomy-group.class":34,"../models/taxonomy/taxonomy-system-attributes.class":36,"../models/taxonomy/taxonomy-terms.class":37}],63:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var content_type_class_1 = require("../models/type/content-type.class");
@@ -8992,37 +4336,36 @@ var TypeMapService = /** @class */ (function () {
     }
     TypeMapService.prototype.mapType = function (type) {
         if (!type) {
-            throw Error("Cannot map type: " + type);
+            throw Error("Cannot map type");
+        }
+        if (!type.elements) {
+            throw Error("Cannot map type elements");
         }
         var typeSystem = new content_type_system_attributes_class_1.ContentTypeSystemAttributes(type.system.id, type.system.name, type.system.codename, type.system.last_modified);
         var elements = [];
-        if (type.elements) {
-            var elementNames = Object.getOwnPropertyNames(type.elements);
-            if (elementNames) {
-                elementNames.forEach(function (elementName) {
-                    var typeElement = type.elements[elementName];
-                    if (!typeElement) {
-                        throw Error("Cannot find element '" + elementName + "' on type '" + type + "'");
-                    }
-                    // use json property as a codename of the type element
-                    var elementCodename = elementName;
-                    // extra properties for certain field types
-                    var taxonomyGroup = typeElement.taxonomy_group;
-                    var options = [];
-                    // some elements can contain options
-                    var rawOptions = typeElement.options;
-                    if (rawOptions) {
-                        if (!Array.isArray(rawOptions)) {
-                            throw Error("Content type 'options' property has to be an array");
-                        }
-                        rawOptions.forEach(function (rawOption) {
-                            options.push(new element_option_class_1.ElementOption(rawOption.name, rawOption.codename));
-                        });
-                    }
-                    elements.push(new element_class_1.Element(elementCodename, typeElement.type, typeElement.name, taxonomyGroup, options));
+        var elementNames = Object.getOwnPropertyNames(type.elements);
+        elementNames.forEach(function (elementName) {
+            var typeElement = type.elements[elementName];
+            if (!typeElement) {
+                throw Error("Cannot find element '" + elementName + "' on type '" + type + "'");
+            }
+            // use json property as a codename of the type element
+            var elementCodename = elementName;
+            // extra properties for certain field types
+            var taxonomyGroup = typeElement.taxonomy_group;
+            var options = [];
+            // some elements can contain options
+            var rawOptions = typeElement.options;
+            if (rawOptions) {
+                if (!Array.isArray(rawOptions)) {
+                    throw Error("Content type 'options' property has to be an array");
+                }
+                rawOptions.forEach(function (rawOption) {
+                    options.push(new element_option_class_1.ElementOption(rawOption.name, rawOption.codename));
                 });
             }
-        }
+            elements.push(new element_class_1.Element(elementCodename, typeElement.type, typeElement.name, taxonomyGroup, options));
+        });
         return new content_type_class_1.ContentType(typeSystem, elements);
     };
     TypeMapService.prototype.mapSingleType = function (response) {
@@ -9038,27 +4381,30 @@ var TypeMapService = /** @class */ (function () {
 }());
 exports.TypeMapService = TypeMapService;
 
-},{"../models/element/element-option.class":48,"../models/element/element.class":50,"../models/type/content-type-system-attributes.class":64,"../models/type/content-type.class":65}],86:[function(require,module,exports){
+},{"../models/element/element-option.class":23,"../models/element/element.class":25,"../models/type/content-type-system-attributes.class":39,"../models/type/content-type.class":40}],64:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var content_item_class_1 = require("../models/item/content-item.class");
 var content_item_system_attributes_1 = require("../models/item/content-item-system-attributes");
 var TypeResolverService = /** @class */ (function () {
     function TypeResolverService(config) {
         this.config = config;
     }
     /**
-     * Creates empty typed object of given type
-     * @param type Type of the content item
+     * Indicates if given type has a type resolver
+     * @param type Type
      */
-    TypeResolverService.prototype.createEmptyTypedObj = function (type) {
-        if (!type) {
-            throw Error('Cannot resolve type because no type name was provided');
-        }
-        var typeResolver = this.config.typeResolvers.find(function (m) { return m.type === type; });
-        if (!typeResolver) {
-            throw Error("Cannot find resolver for type '" + type + "'");
-        }
-        return typeResolver.resolve();
+    TypeResolverService.prototype.hasTypeResolver = function (type) {
+        return !(!this.config.typeResolvers.find(function (m) { return m.type === type; }));
+    };
+    /**
+     * Creates non generic ContentItem used when content type does not have a strongly typed model
+     */
+    TypeResolverService.prototype.createContentItem = function (item) {
+        var contentItem = new content_item_class_1.ContentItem();
+        // use typed 'system' property
+        contentItem.system = new content_item_system_attributes_1.ContentItemSystemAttributes(item.system.id, item.system.name, item.system.codename, item.system.type, item.system.last_modified, item.system.language, item.system.sitemap_locations);
+        return contentItem;
     };
     /**
      * Takes given type name and creates a strongly typed model based specified in client configuration
@@ -9071,11 +4417,25 @@ var TypeResolverService = /** @class */ (function () {
         typedItem.system = new content_item_system_attributes_1.ContentItemSystemAttributes(item.system.id, item.system.name, item.system.codename, item.system.type, item.system.last_modified, item.system.language, item.system.sitemap_locations);
         return typedItem;
     };
+    /**
+     * Creates empty typed object of given type
+     * @param type Type of the content item
+     */
+    TypeResolverService.prototype.createEmptyTypedObj = function (type) {
+        if (!type) {
+            throw Error('Cannot resolve type because no type name was provided');
+        }
+        var typeResolver = this.config.typeResolvers.find(function (m) { return m.type === type; });
+        if (!typeResolver) {
+            throw Error("Cannot find resolver for type '" + type + "'. This error means that no class was registered as TypeResolver for this type. Caller of this method should first check if type is available.");
+        }
+        return typeResolver.resolve();
+    };
     return TypeResolverService;
 }());
 exports.TypeResolverService = TypeResolverService;
 
-},{"../models/item/content-item-system-attributes":52}],87:[function(require,module,exports){
+},{"../models/item/content-item-system-attributes":27,"../models/item/content-item.class":28}],65:[function(require,module,exports){
 'use strict';
 
 var DOCUMENT_MODE = require('./html').DOCUMENT_MODE;
@@ -9233,7 +4593,7 @@ exports.serializeContent = function (name, publicId, systemId) {
     return str;
 };
 
-},{"./html":89}],88:[function(require,module,exports){
+},{"./html":67}],66:[function(require,module,exports){
 'use strict';
 
 var Tokenizer = require('../tokenizer'),
@@ -9495,7 +4855,7 @@ exports.isIntegrationPoint = function (tn, ns, attrs, foreignNS) {
     return false;
 };
 
-},{"../tokenizer":105,"./html":89}],89:[function(require,module,exports){
+},{"../tokenizer":78,"./html":67}],67:[function(require,module,exports){
 'use strict';
 
 var NS = exports.NAMESPACES = {
@@ -9769,22 +5129,7 @@ SPECIAL_ELEMENTS[NS.SVG][$.TITLE] = true;
 SPECIAL_ELEMENTS[NS.SVG][$.FOREIGN_OBJECT] = true;
 SPECIAL_ELEMENTS[NS.SVG][$.DESC] = true;
 
-},{}],90:[function(require,module,exports){
-'use strict';
-
-module.exports = function mergeOptions(defaults, options) {
-    options = options || Object.create(null);
-
-    return [defaults, options].reduce(function (merged, optObj) {
-        Object.keys(optObj).forEach(function (key) {
-            merged[key] = optObj[key];
-        });
-
-        return merged;
-    }, Object.create(null));
-};
-
-},{}],91:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 'use strict';
 
 exports.REPLACEMENT_CHARACTER = '\uFFFD';
@@ -9833,7 +5178,451 @@ exports.CODE_POINT_SEQUENCES = {
     SYSTEM_STRING: [0x53, 0x59, 0x53, 0x54, 0x45, 0x4D] //SYSTEM
 };
 
-},{}],92:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
+'use strict';
+
+var Mixin = require('../../utils/mixin'),
+    inherits = require('util').inherits;
+
+var LocationInfoOpenElementStackMixin = module.exports = function (stack, options) {
+    Mixin.call(this, stack);
+
+    this.onItemPop = options.onItemPop;
+};
+
+inherits(LocationInfoOpenElementStackMixin, Mixin);
+
+LocationInfoOpenElementStackMixin.prototype._getOverriddenMethods = function (mxn, orig) {
+    return {
+        pop: function () {
+            mxn.onItemPop(this.current);
+            orig.pop.call(this);
+        },
+
+        popAllUpToHtmlElement: function () {
+            for (var i = this.stackTop; i > 0; i--)
+                mxn.onItemPop(this.items[i]);
+
+            orig.popAllUpToHtmlElement.call(this);
+        },
+
+        remove: function (element) {
+            mxn.onItemPop(this.current);
+            orig.remove.call(this, element);
+        }
+    };
+};
+
+
+},{"../../utils/mixin":84,"util":4}],70:[function(require,module,exports){
+'use strict';
+
+var Mixin = require('../../utils/mixin'),
+    Tokenizer = require('../../tokenizer'),
+    LocationInfoTokenizerMixin = require('./tokenizer_mixin'),
+    PositionTrackingPreprocessorMixin = require('../position_tracking/preprocessor_mixin'),
+    LocationInfoOpenElementStackMixin = require('./open_element_stack_mixin'),
+    HTML = require('../../common/html'),
+    inherits = require('util').inherits;
+
+
+//Aliases
+var $ = HTML.TAG_NAMES;
+
+var LocationInfoParserMixin = module.exports = function (parser) {
+    Mixin.call(this, parser);
+
+    this.parser = parser;
+    this.posTracker = null;
+    this.lastStartTagToken = null;
+    this.lastFosterParentingLocation = null;
+    this.currentToken = null;
+};
+
+inherits(LocationInfoParserMixin, Mixin);
+
+
+LocationInfoParserMixin.prototype._setStartLocation = function (element) {
+    if (this.lastStartTagToken) {
+        element.__location = Object.create(this.lastStartTagToken.location);
+        element.__location.startTag = this.lastStartTagToken.location;
+    }
+    else
+        element.__location = null;
+};
+
+LocationInfoParserMixin.prototype._setEndLocation = function (element, closingToken) {
+    var loc = element.__location;
+
+    if (loc) {
+        if (closingToken.location) {
+            var ctLoc = closingToken.location,
+                tn = this.parser.treeAdapter.getTagName(element);
+
+            // NOTE: For cases like <p> <p> </p> - First 'p' closes without a closing
+            // tag and for cases like <td> <p> </td> - 'p' closes without a closing tag.
+            var isClosingEndTag = closingToken.type === Tokenizer.END_TAG_TOKEN && tn === closingToken.tagName;
+
+            if (isClosingEndTag) {
+                loc.endTag = Object.create(ctLoc);
+                loc.endOffset = ctLoc.endOffset;
+            }
+
+            else
+                loc.endOffset = ctLoc.startOffset;
+        }
+
+        else if (closingToken.type === Tokenizer.EOF_TOKEN)
+            loc.endOffset = this.posTracker.offset;
+    }
+};
+
+LocationInfoParserMixin.prototype._getOverriddenMethods = function (mxn, orig) {
+    return {
+        _bootstrap: function (document, fragmentContext) {
+            orig._bootstrap.call(this, document, fragmentContext);
+
+            mxn.lastStartTagToken = null;
+            mxn.lastFosterParentingLocation = null;
+            mxn.currentToken = null;
+            mxn.posTracker = new PositionTrackingPreprocessorMixin(this.tokenizer.preprocessor);
+
+            new LocationInfoTokenizerMixin(this.tokenizer);
+
+            new LocationInfoOpenElementStackMixin(this.openElements, {
+                onItemPop: function (element) {
+                    mxn._setEndLocation(element, mxn.currentToken);
+                }
+            });
+        },
+
+        _runParsingLoop: function (scriptHandler) {
+            orig._runParsingLoop.call(this, scriptHandler);
+
+            // NOTE: generate location info for elements
+            // that remains on open element stack
+            for (var i = this.openElements.stackTop; i >= 0; i--)
+                mxn._setEndLocation(this.openElements.items[i], mxn.currentToken);
+        },
+
+
+        //Token processing
+        _processTokenInForeignContent: function (token) {
+            mxn.currentToken = token;
+            orig._processTokenInForeignContent.call(this, token);
+        },
+
+        _processToken: function (token) {
+            mxn.currentToken = token;
+            orig._processToken.call(this, token);
+
+            //NOTE: <body> and <html> are never popped from the stack, so we need to updated
+            //their end location explicitly.
+            var requireExplicitUpdate = token.type === Tokenizer.END_TAG_TOKEN &&
+                                        (token.tagName === $.HTML ||
+                                         token.tagName === $.BODY && this.openElements.hasInScope($.BODY));
+
+            if (requireExplicitUpdate) {
+                for (var i = this.openElements.stackTop; i >= 0; i--) {
+                    var element = this.openElements.items[i];
+
+                    if (this.treeAdapter.getTagName(element) === token.tagName) {
+                        mxn._setEndLocation(element, token);
+                        break;
+                    }
+                }
+            }
+        },
+
+
+        //Doctype
+        _setDocumentType: function (token) {
+            orig._setDocumentType.call(this, token);
+
+            var documentChildren = this.treeAdapter.getChildNodes(this.document),
+                cnLength = documentChildren.length;
+
+            for (var i = 0; i < cnLength; i++) {
+                var node = documentChildren[i];
+
+                if (this.treeAdapter.isDocumentTypeNode(node)) {
+                    node.__location = token.location;
+                    break;
+                }
+            }
+        },
+
+
+        //Elements
+        _attachElementToTree: function (element) {
+            //NOTE: _attachElementToTree is called from _appendElement, _insertElement and _insertTemplate methods.
+            //So we will use token location stored in this methods for the element.
+            mxn._setStartLocation(element);
+            mxn.lastStartTagToken = null;
+            orig._attachElementToTree.call(this, element);
+        },
+
+        _appendElement: function (token, namespaceURI) {
+            mxn.lastStartTagToken = token;
+            orig._appendElement.call(this, token, namespaceURI);
+        },
+
+        _insertElement: function (token, namespaceURI) {
+            mxn.lastStartTagToken = token;
+            orig._insertElement.call(this, token, namespaceURI);
+        },
+
+        _insertTemplate: function (token) {
+            mxn.lastStartTagToken = token;
+            orig._insertTemplate.call(this, token);
+
+            var tmplContent = this.treeAdapter.getTemplateContent(this.openElements.current);
+
+            tmplContent.__location = null;
+        },
+
+        _insertFakeRootElement: function () {
+            orig._insertFakeRootElement.call(this);
+            this.openElements.current.__location = null;
+        },
+
+        //Comments
+        _appendCommentNode: function (token, parent) {
+            orig._appendCommentNode.call(this, token, parent);
+
+            var children = this.treeAdapter.getChildNodes(parent),
+                commentNode = children[children.length - 1];
+
+            commentNode.__location = token.location;
+        },
+
+        //Text
+        _findFosterParentingLocation: function () {
+            //NOTE: store last foster parenting location, so we will be able to find inserted text
+            //in case of foster parenting
+            mxn.lastFosterParentingLocation = orig._findFosterParentingLocation.call(this);
+
+            return mxn.lastFosterParentingLocation;
+        },
+
+        _insertCharacters: function (token) {
+            orig._insertCharacters.call(this, token);
+
+            var hasFosterParent = this._shouldFosterParentOnInsertion(),
+                parent = hasFosterParent && mxn.lastFosterParentingLocation.parent ||
+                         this.openElements.currentTmplContent ||
+                         this.openElements.current,
+                siblings = this.treeAdapter.getChildNodes(parent),
+                textNodeIdx = hasFosterParent && mxn.lastFosterParentingLocation.beforeElement ?
+                siblings.indexOf(mxn.lastFosterParentingLocation.beforeElement) - 1 :
+                siblings.length - 1,
+                textNode = siblings[textNodeIdx];
+
+            //NOTE: if we have location assigned by another token, then just update end position
+            if (textNode.__location)
+                textNode.__location.endOffset = token.location.endOffset;
+
+            else
+                textNode.__location = token.location;
+        }
+    };
+};
+
+
+},{"../../common/html":67,"../../tokenizer":78,"../../utils/mixin":84,"../position_tracking/preprocessor_mixin":72,"./open_element_stack_mixin":69,"./tokenizer_mixin":71,"util":4}],71:[function(require,module,exports){
+'use strict';
+
+var Mixin = require('../../utils/mixin'),
+    Tokenizer = require('../../tokenizer'),
+    PositionTrackingPreprocessorMixin = require('../position_tracking/preprocessor_mixin'),
+    inherits = require('util').inherits;
+
+var LocationInfoTokenizerMixin = module.exports = function (tokenizer) {
+    Mixin.call(this, tokenizer);
+
+    this.tokenizer = tokenizer;
+    this.posTracker = new PositionTrackingPreprocessorMixin(tokenizer.preprocessor);
+    this.currentAttrLocation = null;
+    this.currentTokenLocation = null;
+};
+
+inherits(LocationInfoTokenizerMixin, Mixin);
+
+LocationInfoTokenizerMixin.prototype._getCurrentLocation = function () {
+    return {
+        line: this.posTracker.line,
+        col: this.posTracker.col,
+        startOffset: this.posTracker.offset,
+        endOffset: -1
+    };
+};
+
+LocationInfoTokenizerMixin.prototype._attachCurrentAttrLocationInfo = function () {
+    this.currentAttrLocation.endOffset = this.posTracker.offset;
+
+    var currentToken = this.tokenizer.currentToken,
+        currentAttr = this.tokenizer.currentAttr;
+
+    if (!currentToken.location.attrs)
+        currentToken.location.attrs = Object.create(null);
+
+    currentToken.location.attrs[currentAttr.name] = this.currentAttrLocation;
+};
+
+LocationInfoTokenizerMixin.prototype._getOverriddenMethods = function (mxn, orig) {
+    var methods = {
+        _createStartTagToken: function () {
+            orig._createStartTagToken.call(this);
+            this.currentToken.location = mxn.currentTokenLocation;
+        },
+
+        _createEndTagToken: function () {
+            orig._createEndTagToken.call(this);
+            this.currentToken.location = mxn.currentTokenLocation;
+        },
+
+        _createCommentToken: function () {
+            orig._createCommentToken.call(this);
+            this.currentToken.location = mxn.currentTokenLocation;
+        },
+
+        _createDoctypeToken: function (initialName) {
+            orig._createDoctypeToken.call(this, initialName);
+            this.currentToken.location = mxn.currentTokenLocation;
+        },
+
+        _createCharacterToken: function (type, ch) {
+            orig._createCharacterToken.call(this, type, ch);
+            this.currentCharacterToken.location = mxn.currentTokenLocation;
+        },
+
+        _createAttr: function (attrNameFirstCh) {
+            orig._createAttr.call(this, attrNameFirstCh);
+            mxn.currentAttrLocation = mxn._getCurrentLocation();
+        },
+
+        _leaveAttrName: function (toState) {
+            orig._leaveAttrName.call(this, toState);
+            mxn._attachCurrentAttrLocationInfo();
+        },
+
+        _leaveAttrValue: function (toState) {
+            orig._leaveAttrValue.call(this, toState);
+            mxn._attachCurrentAttrLocationInfo();
+        },
+
+        _emitCurrentToken: function () {
+            //NOTE: if we have pending character token make it's end location equal to the
+            //current token's start location.
+            if (this.currentCharacterToken)
+                this.currentCharacterToken.location.endOffset = this.currentToken.location.startOffset;
+
+            this.currentToken.location.endOffset = mxn.posTracker.offset + 1;
+            orig._emitCurrentToken.call(this);
+        },
+
+        _emitCurrentCharacterToken: function () {
+            //NOTE: if we have character token and it's location wasn't set in the _emitCurrentToken(),
+            //then set it's location at the current preprocessor position.
+            //We don't need to increment preprocessor position, since character token
+            //emission is always forced by the start of the next character token here.
+            //So, we already have advanced position.
+            if (this.currentCharacterToken && this.currentCharacterToken.location.endOffset === -1)
+                this.currentCharacterToken.location.endOffset = mxn.posTracker.offset;
+
+            orig._emitCurrentCharacterToken.call(this);
+        }
+    };
+
+    //NOTE: patch initial states for each mode to obtain token start position
+    Object.keys(Tokenizer.MODE).forEach(function (modeName) {
+        var state = Tokenizer.MODE[modeName];
+
+        methods[state] = function (cp) {
+            mxn.currentTokenLocation = mxn._getCurrentLocation();
+            orig[state].call(this, cp);
+        };
+    });
+
+    return methods;
+};
+
+
+},{"../../tokenizer":78,"../../utils/mixin":84,"../position_tracking/preprocessor_mixin":72,"util":4}],72:[function(require,module,exports){
+'use strict';
+
+var Mixin = require('../../utils/mixin'),
+    inherits = require('util').inherits,
+    UNICODE = require('../../common/unicode');
+
+//Aliases
+var $ = UNICODE.CODE_POINTS;
+
+var PositionTrackingPreprocessorMixin = module.exports = function (preprocessor) {
+    // NOTE: avoid installing tracker twice
+    if (!preprocessor.__locTracker) {
+        preprocessor.__locTracker = this;
+
+        Mixin.call(this, preprocessor);
+
+        this.preprocessor = preprocessor;
+        this.isEol = false;
+        this.lineStartPos = 0;
+        this.droppedBufferSize = 0;
+
+        this.col = -1;
+        this.line = 1;
+    }
+
+    return preprocessor.__locTracker;
+};
+
+inherits(PositionTrackingPreprocessorMixin, Mixin);
+
+Object.defineProperty(PositionTrackingPreprocessorMixin.prototype, 'offset', {
+    get: function () {
+        return this.droppedBufferSize + this.preprocessor.pos;
+    }
+});
+
+PositionTrackingPreprocessorMixin.prototype._getOverriddenMethods = function (mxn, orig) {
+    return {
+        advance: function () {
+            var cp = orig.advance.call(this);
+
+            //NOTE: LF should be in the last column of the line
+            if (mxn.isEol) {
+                mxn.isEol = false;
+                mxn.line++;
+                mxn.lineStartPos = mxn.offset;
+            }
+
+            if (cp === $.LINE_FEED)
+                mxn.isEol = true;
+
+            mxn.col = mxn.offset - mxn.lineStartPos + 1;
+
+            return cp;
+        },
+
+        retreat: function () {
+            orig.retreat.call(this);
+            mxn.isEol = false;
+
+            mxn.col = mxn.offset - mxn.lineStartPos + 1;
+        },
+
+        dropParsedChunk: function () {
+            var prevPos = this.pos;
+
+            orig.dropParsedChunk.call(this);
+
+            mxn.droppedBufferSize += prevPos - this.pos;
+        }
+    };
+};
+
+},{"../../common/unicode":68,"../../utils/mixin":84,"util":4}],73:[function(require,module,exports){
 'use strict';
 
 var Parser = require('./parser'),
@@ -9874,384 +5663,34 @@ exports.treeAdapters = {
 
 
 // Streaming
-exports.ParserStream = require('./parser/parser_stream');
-exports.PlainTextConversionStream = require('./parser/plain_text_conversion_stream');
-exports.SerializerStream = require('./serializer/serializer_stream');
-exports.SAXParser = require('./sax');
-
-},{"./parser":96,"./parser/parser_stream":98,"./parser/plain_text_conversion_stream":99,"./sax":101,"./serializer":103,"./serializer/serializer_stream":104,"./tree_adapters/default":108,"./tree_adapters/htmlparser2":109}],93:[function(require,module,exports){
-'use strict';
-
-var OpenElementStack = require('../parser/open_element_stack'),
-    Tokenizer = require('../tokenizer'),
-    HTML = require('../common/html');
-
-
-//Aliases
-var $ = HTML.TAG_NAMES;
-
-exports.assign = function (parser) {
-    //NOTE: obtain Parser proto this way to avoid module circular references
-    var parserProto = Object.getPrototypeOf(parser),
-        treeAdapter = parser.treeAdapter,
-        attachableElementLocation = null,
-        lastFosterParentingLocation = null,
-        currentToken = null;
-
-    function setEndLocation(element, closingToken) {
-        var loc = element.__location;
-
-        if (!loc)
-            return;
-
-        if (!loc.startTag) {
-            loc.startTag = {
-                line: loc.line,
-                col: loc.col,
-                startOffset: loc.startOffset,
-                endOffset: loc.endOffset
-            };
-
-            if (loc.attrs)
-                loc.startTag.attrs = loc.attrs;
-        }
-
-        if (closingToken.location) {
-            var ctLocation = closingToken.location,
-                tn = treeAdapter.getTagName(element),
-            // NOTE: For cases like <p> <p> </p> - First 'p' closes without a closing tag and
-            // for cases like <td> <p> </td> - 'p' closes without a closing tag
-                isClosingEndTag = closingToken.type === Tokenizer.END_TAG_TOKEN &&
-                                  tn === closingToken.tagName;
-
-            if (isClosingEndTag) {
-                loc.endTag = {
-                    line: ctLocation.line,
-                    col: ctLocation.col,
-                    startOffset: ctLocation.startOffset,
-                    endOffset: ctLocation.endOffset
-                };
-            }
-
-            if (isClosingEndTag)
-                loc.endOffset = ctLocation.endOffset;
-            else
-                loc.endOffset = ctLocation.startOffset;
-        }
-
-        else if (closingToken.type === Tokenizer.EOF_TOKEN)
-            loc.endOffset = parser.tokenizer.preprocessor.sourcePos;
-    }
-
-    //NOTE: patch _bootstrap method
-    parser._bootstrap = function (document, fragmentContext) {
-        parserProto._bootstrap.call(this, document, fragmentContext);
-
-        attachableElementLocation = null;
-        lastFosterParentingLocation = null;
-        currentToken = null;
-
-        //OpenElementStack
-        parser.openElements.pop = function () {
-            setEndLocation(this.current, currentToken);
-            OpenElementStack.prototype.pop.call(this);
-        };
-
-        parser.openElements.popAllUpToHtmlElement = function () {
-            for (var i = this.stackTop; i > 0; i--)
-                setEndLocation(this.items[i], currentToken);
-
-            OpenElementStack.prototype.popAllUpToHtmlElement.call(this);
-        };
-
-        parser.openElements.remove = function (element) {
-            setEndLocation(element, currentToken);
-            OpenElementStack.prototype.remove.call(this, element);
-        };
-    };
-
-    parser._runParsingLoop = function (scriptHandler) {
-        parserProto._runParsingLoop.call(this, scriptHandler);
-
-        // NOTE: generate location info for elements
-        // that remains on open element stack
-        for (var i = parser.openElements.stackTop; i >= 0; i--)
-            setEndLocation(parser.openElements.items[i], currentToken);
-    };
-
-
-    //Token processing
-    parser._processTokenInForeignContent = function (token) {
-        currentToken = token;
-        parserProto._processTokenInForeignContent.call(this, token);
-    };
-
-    parser._processToken = function (token) {
-        currentToken = token;
-        parserProto._processToken.call(this, token);
-
-        //NOTE: <body> and <html> are never popped from the stack, so we need to updated
-        //their end location explicitly.
-        if (token.type === Tokenizer.END_TAG_TOKEN &&
-            (token.tagName === $.HTML ||
-             token.tagName === $.BODY && this.openElements.hasInScope($.BODY))) {
-            for (var i = this.openElements.stackTop; i >= 0; i--) {
-                var element = this.openElements.items[i];
-
-                if (this.treeAdapter.getTagName(element) === token.tagName) {
-                    setEndLocation(element, token);
-                    break;
-                }
-            }
-        }
-    };
-
-
-    //Doctype
-    parser._setDocumentType = function (token) {
-        parserProto._setDocumentType.call(this, token);
-
-        var documentChildren = this.treeAdapter.getChildNodes(this.document),
-            cnLength = documentChildren.length;
-
-        for (var i = 0; i < cnLength; i++) {
-            var node = documentChildren[i];
-
-            if (this.treeAdapter.isDocumentTypeNode(node)) {
-                node.__location = token.location;
-                break;
-            }
-        }
-    };
-
-
-    //Elements
-    parser._attachElementToTree = function (element) {
-        //NOTE: _attachElementToTree is called from _appendElement, _insertElement and _insertTemplate methods.
-        //So we will use token location stored in this methods for the element.
-        element.__location = attachableElementLocation || null;
-        attachableElementLocation = null;
-        parserProto._attachElementToTree.call(this, element);
-    };
-
-    parser._appendElement = function (token, namespaceURI) {
-        attachableElementLocation = token.location;
-        parserProto._appendElement.call(this, token, namespaceURI);
-    };
-
-    parser._insertElement = function (token, namespaceURI) {
-        attachableElementLocation = token.location;
-        parserProto._insertElement.call(this, token, namespaceURI);
-    };
-
-    parser._insertTemplate = function (token) {
-        attachableElementLocation = token.location;
-        parserProto._insertTemplate.call(this, token);
-
-        var tmplContent = this.treeAdapter.getTemplateContent(this.openElements.current);
-
-        tmplContent.__location = null;
-    };
-
-    parser._insertFakeRootElement = function () {
-        parserProto._insertFakeRootElement.call(this);
-        this.openElements.current.__location = null;
-    };
-
-
-    //Comments
-    parser._appendCommentNode = function (token, parent) {
-        parserProto._appendCommentNode.call(this, token, parent);
-
-        var children = this.treeAdapter.getChildNodes(parent),
-            commentNode = children[children.length - 1];
-
-        commentNode.__location = token.location;
-    };
-
-
-    //Text
-    parser._findFosterParentingLocation = function () {
-        //NOTE: store last foster parenting location, so we will be able to find inserted text
-        //in case of foster parenting
-        lastFosterParentingLocation = parserProto._findFosterParentingLocation.call(this);
-        return lastFosterParentingLocation;
-    };
-
-    parser._insertCharacters = function (token) {
-        parserProto._insertCharacters.call(this, token);
-
-        var hasFosterParent = this._shouldFosterParentOnInsertion(),
-            parent = hasFosterParent && lastFosterParentingLocation.parent ||
-                     this.openElements.currentTmplContent ||
-                     this.openElements.current,
-            siblings = this.treeAdapter.getChildNodes(parent),
-            textNodeIdx = hasFosterParent && lastFosterParentingLocation.beforeElement ?
-            siblings.indexOf(lastFosterParentingLocation.beforeElement) - 1 :
-            siblings.length - 1,
-            textNode = siblings[textNodeIdx];
-
-        //NOTE: if we have location assigned by another token, then just update end position
-        if (textNode.__location)
-            textNode.__location.endOffset = token.location.endOffset;
-
-        else
-            textNode.__location = token.location;
-    };
+// NOTE: streaming API is lazy loadable to enable bundling for platforms
+// that are different from Node.js.
+// See https://github.com/inikulin/parse5/issues/235.
+var streamingAPI = {
+    ParserStream: './parser/parser_stream',
+    PlainTextConversionStream: './parser/plain_text_conversion_stream',
+    SerializerStream: './serializer/serializer_stream',
+    SAXParser: './sax'
 };
 
+Object.keys(streamingAPI).forEach(function (cls) {
+    Object.defineProperty(exports, cls, {
+        get: function () {
+            try {
+                return require(streamingAPI[cls]);
+            }
 
-},{"../common/html":89,"../parser/open_element_stack":97,"../tokenizer":105}],94:[function(require,module,exports){
-'use strict';
-
-var UNICODE = require('../common/unicode');
-
-//Aliases
-var $ = UNICODE.CODE_POINTS;
-
-
-exports.assign = function (tokenizer) {
-    //NOTE: obtain Tokenizer proto this way to avoid module circular references
-    var tokenizerProto = Object.getPrototypeOf(tokenizer),
-        tokenStartOffset = -1,
-        tokenCol = -1,
-        tokenLine = 1,
-        isEol = false,
-        lineStartPos = 0,
-        col = -1,
-        line = 1;
-
-    function attachLocationInfo(token) {
-        token.location = {
-            line: tokenLine,
-            col: tokenCol,
-            startOffset: tokenStartOffset,
-            endOffset: -1
-        };
-    }
-
-    //NOTE: patch consumption method to track line/col information
-    tokenizer._consume = function () {
-        var cp = tokenizerProto._consume.call(this);
-
-        //NOTE: LF should be in the last column of the line
-        if (isEol) {
-            isEol = false;
-            line++;
-            lineStartPos = this.preprocessor.sourcePos;
+            catch (e) {
+                throw new Error(
+                    cls + ' is supported only for Node.js.' +
+                    'See https://github.com/inikulin/parse5/issues/235 for the details.'
+                );
+            }
         }
+    });
+});
 
-        if (cp === $.LINE_FEED)
-            isEol = true;
-
-        col = this.preprocessor.sourcePos - lineStartPos + 1;
-
-        return cp;
-    };
-
-    tokenizer._unconsume = function () {
-        tokenizerProto._unconsume.call(this);
-        isEol = false;
-
-        col = this.preprocessor.sourcePos - lineStartPos + 1;
-    };
-
-    //NOTE: patch token creation methods and attach location objects
-    tokenizer._createStartTagToken = function () {
-        tokenizerProto._createStartTagToken.call(this);
-        attachLocationInfo(this.currentToken);
-    };
-
-    tokenizer._createEndTagToken = function () {
-        tokenizerProto._createEndTagToken.call(this);
-        attachLocationInfo(this.currentToken);
-    };
-
-    tokenizer._createCommentToken = function () {
-        tokenizerProto._createCommentToken.call(this);
-        attachLocationInfo(this.currentToken);
-    };
-
-    tokenizer._createDoctypeToken = function (initialName) {
-        tokenizerProto._createDoctypeToken.call(this, initialName);
-        attachLocationInfo(this.currentToken);
-    };
-
-    tokenizer._createCharacterToken = function (type, ch) {
-        tokenizerProto._createCharacterToken.call(this, type, ch);
-        attachLocationInfo(this.currentCharacterToken);
-    };
-
-    tokenizer._createAttr = function (attrNameFirstCh) {
-        tokenizerProto._createAttr.call(this, attrNameFirstCh);
-        this.currentAttrLocation = {
-            line: line,
-            col: col,
-            startOffset: this.preprocessor.sourcePos,
-            endOffset: -1
-        };
-    };
-
-    tokenizer._leaveAttrName = function (toState) {
-        tokenizerProto._leaveAttrName.call(this, toState);
-        this._attachCurrentAttrLocationInfo();
-    };
-
-    tokenizer._leaveAttrValue = function (toState) {
-        tokenizerProto._leaveAttrValue.call(this, toState);
-        this._attachCurrentAttrLocationInfo();
-    };
-
-    tokenizer._attachCurrentAttrLocationInfo = function () {
-        this.currentAttrLocation.endOffset = this.preprocessor.sourcePos;
-
-        if (!this.currentToken.location.attrs)
-            this.currentToken.location.attrs = Object.create(null);
-
-        this.currentToken.location.attrs[this.currentAttr.name] = this.currentAttrLocation;
-    };
-
-    //NOTE: patch token emission methods to determine end location
-    tokenizer._emitCurrentToken = function () {
-        //NOTE: if we have pending character token make it's end location equal to the
-        //current token's start location.
-        if (this.currentCharacterToken)
-            this.currentCharacterToken.location.endOffset = this.currentToken.location.startOffset;
-
-        this.currentToken.location.endOffset = this.preprocessor.sourcePos + 1;
-        tokenizerProto._emitCurrentToken.call(this);
-    };
-
-    tokenizer._emitCurrentCharacterToken = function () {
-        //NOTE: if we have character token and it's location wasn't set in the _emitCurrentToken(),
-        //then set it's location at the current preprocessor position.
-        //We don't need to increment preprocessor position, since character token
-        //emission is always forced by the start of the next character token here.
-        //So, we already have advanced position.
-        if (this.currentCharacterToken && this.currentCharacterToken.location.endOffset === -1)
-            this.currentCharacterToken.location.endOffset = this.preprocessor.sourcePos;
-
-        tokenizerProto._emitCurrentCharacterToken.call(this);
-    };
-
-    //NOTE: patch initial states for each mode to obtain token start position
-    Object.keys(tokenizerProto.MODE)
-
-        .map(function (modeName) {
-            return tokenizerProto.MODE[modeName];
-        })
-
-        .forEach(function (state) {
-            tokenizer[state] = function (cp) {
-                tokenStartOffset = this.preprocessor.sourcePos;
-                tokenLine = line;
-                tokenCol = col;
-                tokenizerProto[state].call(this, cp);
-            };
-        });
-};
-
-},{"../common/unicode":91}],95:[function(require,module,exports){
+},{"./parser":75,"./serializer":77,"./tree_adapters/default":81,"./tree_adapters/htmlparser2":82}],74:[function(require,module,exports){
 'use strict';
 
 //Const
@@ -10420,17 +5859,17 @@ FormattingElementList.prototype.getElementEntry = function (element) {
     return null;
 };
 
-},{}],96:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 'use strict';
 
 var Tokenizer = require('../tokenizer'),
     OpenElementStack = require('./open_element_stack'),
     FormattingElementList = require('./formatting_element_list'),
-    locationInfoMixin = require('../location_info/parser_mixin'),
+    LocationInfoParserMixin = require('../extensions/location_info/parser_mixin'),
     defaultTreeAdapter = require('../tree_adapters/default'),
+    mergeOptions = require('../utils/merge_options'),
     doctype = require('../common/doctype'),
     foreignContent = require('../common/foreign_content'),
-    mergeOptions = require('../common/merge_options'),
     UNICODE = require('../common/unicode'),
     HTML = require('../common/html');
 
@@ -10733,7 +6172,7 @@ var Parser = module.exports = function (options) {
     this.pendingScript = null;
 
     if (this.options.locationInfo)
-        locationInfoMixin.assign(this);
+        new LocationInfoParserMixin(this);
 };
 
 // API
@@ -13241,7 +8680,7 @@ function endTagInForeignContent(p, token) {
     }
 }
 
-},{"../common/doctype":87,"../common/foreign_content":88,"../common/html":89,"../common/merge_options":90,"../common/unicode":91,"../location_info/parser_mixin":93,"../tokenizer":105,"../tree_adapters/default":108,"./formatting_element_list":95,"./open_element_stack":97}],97:[function(require,module,exports){
+},{"../common/doctype":65,"../common/foreign_content":66,"../common/html":67,"../common/unicode":68,"../extensions/location_info/parser_mixin":70,"../tokenizer":78,"../tree_adapters/default":81,"../utils/merge_options":83,"./formatting_element_list":74,"./open_element_stack":76}],76:[function(require,module,exports){
 'use strict';
 
 var HTML = require('../common/html');
@@ -13638,398 +9077,12 @@ OpenElementStack.prototype.generateImpliedEndTagsWithExclusion = function (exclu
         this.pop();
 };
 
-},{"../common/html":89}],98:[function(require,module,exports){
-'use strict';
-
-var WritableStream = require('stream').Writable,
-    inherits = require('util').inherits,
-    Parser = require('./index');
-
-var ParserStream = module.exports = function (options) {
-    WritableStream.call(this);
-
-    this.parser = new Parser(options);
-
-    this.lastChunkWritten = false;
-    this.writeCallback = null;
-    this.pausedByScript = false;
-
-    this.document = this.parser.treeAdapter.createDocument();
-
-    this.pendingHtmlInsertions = [];
-
-    this._resume = this._resume.bind(this);
-    this._documentWrite = this._documentWrite.bind(this);
-    this._scriptHandler = this._scriptHandler.bind(this);
-
-    this.parser._bootstrap(this.document, null);
-};
-
-inherits(ParserStream, WritableStream);
-
-//WritableStream implementation
-ParserStream.prototype._write = function (chunk, encoding, callback) {
-    this.writeCallback = callback;
-    this.parser.tokenizer.write(chunk.toString('utf8'), this.lastChunkWritten);
-    this._runParsingLoop();
-};
-
-ParserStream.prototype.end = function (chunk, encoding, callback) {
-    this.lastChunkWritten = true;
-    WritableStream.prototype.end.call(this, chunk, encoding, callback);
-};
-
-//Scriptable parser implementation
-ParserStream.prototype._runParsingLoop = function () {
-    this.parser.runParsingLoopForCurrentChunk(this.writeCallback, this._scriptHandler);
-};
-
-ParserStream.prototype._resume = function () {
-    if (!this.pausedByScript)
-        throw new Error('Parser was already resumed');
-
-    while (this.pendingHtmlInsertions.length) {
-        var html = this.pendingHtmlInsertions.pop();
-
-        this.parser.tokenizer.insertHtmlAtCurrentPos(html);
-    }
-
-    this.pausedByScript = false;
-
-    //NOTE: keep parsing if we don't wait for the next input chunk
-    if (this.parser.tokenizer.active)
-        this._runParsingLoop();
-};
-
-ParserStream.prototype._documentWrite = function (html) {
-    if (!this.parser.stopped)
-        this.pendingHtmlInsertions.push(html);
-};
-
-ParserStream.prototype._scriptHandler = function (scriptElement) {
-    if (this.listeners('script').length) {
-        this.pausedByScript = true;
-        this.emit('script', scriptElement, this._documentWrite, this._resume);
-    }
-    else
-        this._runParsingLoop();
-};
-
-
-},{"./index":96,"stream":26,"util":31}],99:[function(require,module,exports){
-'use strict';
-
-var ParserStream = require('./parser_stream'),
-    inherits = require('util').inherits,
-    $ = require('../common/html').TAG_NAMES;
-
-var PlainTextConversionStream = module.exports = function (options) {
-    ParserStream.call(this, options);
-
-    // NOTE: see https://html.spec.whatwg.org/#read-text
-    this.parser._insertFakeElement($.HTML);
-    this.parser._insertFakeElement($.HEAD);
-    this.parser.openElements.pop();
-    this.parser._insertFakeElement($.BODY);
-    this.parser._insertFakeElement($.PRE);
-    this.parser.treeAdapter.insertText(this.parser.openElements.current, '\n');
-    this.parser.switchToPlaintextParsing();
-};
-
-inherits(PlainTextConversionStream, ParserStream);
-
-},{"../common/html":89,"./parser_stream":98,"util":31}],100:[function(require,module,exports){
-'use strict';
-
-var WritableStream = require('stream').Writable,
-    util = require('util');
-
-var DevNullStream = module.exports = function () {
-    WritableStream.call(this);
-};
-
-util.inherits(DevNullStream, WritableStream);
-
-DevNullStream.prototype._write = function (chunk, encoding, cb) {
-    cb();
-};
-
-},{"stream":26,"util":31}],101:[function(require,module,exports){
-'use strict';
-
-var TransformStream = require('stream').Transform,
-    DevNullStream = require('./dev_null_stream'),
-    inherits = require('util').inherits,
-    Tokenizer = require('../tokenizer'),
-    ParserFeedbackSimulator = require('./parser_feedback_simulator'),
-    mergeOptions = require('../common/merge_options');
-
-var DEFAULT_OPTIONS = {
-    locationInfo: false
-};
-
-var SAXParser = module.exports = function (options) {
-    TransformStream.call(this);
-
-    this.options = mergeOptions(DEFAULT_OPTIONS, options);
-
-    this.tokenizer = new Tokenizer(options);
-    this.parserFeedbackSimulator = new ParserFeedbackSimulator(this.tokenizer);
-
-    this.pendingText = null;
-    this.currentTokenLocation = void 0;
-
-    this.lastChunkWritten = false;
-    this.stopped = false;
-
-    // NOTE: always pipe stream to the /dev/null stream to avoid
-    // `highWaterMark` hit even if we don't have consumers.
-    // (see: https://github.com/inikulin/parse5/issues/97#issuecomment-171940774)
-    this.pipe(new DevNullStream());
-};
-
-inherits(SAXParser, TransformStream);
-
-//TransformStream implementation
-SAXParser.prototype._transform = function (chunk, encoding, callback) {
-    if (!this.stopped) {
-        this.tokenizer.write(chunk.toString('utf8'), this.lastChunkWritten);
-        this._runParsingLoop();
-    }
-
-    this.push(chunk);
-
-    callback();
-};
-
-SAXParser.prototype._flush = function (callback) {
-    callback();
-};
-
-SAXParser.prototype.end = function (chunk, encoding, callback) {
-    this.lastChunkWritten = true;
-    TransformStream.prototype.end.call(this, chunk, encoding, callback);
-};
-
-SAXParser.prototype.stop = function () {
-    this.stopped = true;
-};
-
-//Internals
-SAXParser.prototype._runParsingLoop = function () {
-    do {
-        var token = this.parserFeedbackSimulator.getNextToken();
-
-        if (token.type === Tokenizer.HIBERNATION_TOKEN)
-            break;
-
-        if (token.type === Tokenizer.CHARACTER_TOKEN ||
-            token.type === Tokenizer.WHITESPACE_CHARACTER_TOKEN ||
-            token.type === Tokenizer.NULL_CHARACTER_TOKEN) {
-
-            if (this.options.locationInfo) {
-                if (this.pendingText === null)
-                    this.currentTokenLocation = token.location;
-
-                else
-                    this.currentTokenLocation.endOffset = token.location.endOffset;
-            }
-
-            this.pendingText = (this.pendingText || '') + token.chars;
-        }
-
-        else {
-            this._emitPendingText();
-            this._handleToken(token);
-        }
-    } while (!this.stopped && token.type !== Tokenizer.EOF_TOKEN);
-};
-
-SAXParser.prototype._handleToken = function (token) {
-    if (this.options.locationInfo)
-        this.currentTokenLocation = token.location;
-
-    if (token.type === Tokenizer.START_TAG_TOKEN)
-        this.emit('startTag', token.tagName, token.attrs, token.selfClosing, this.currentTokenLocation);
-
-    else if (token.type === Tokenizer.END_TAG_TOKEN)
-        this.emit('endTag', token.tagName, this.currentTokenLocation);
-
-    else if (token.type === Tokenizer.COMMENT_TOKEN)
-        this.emit('comment', token.data, this.currentTokenLocation);
-
-    else if (token.type === Tokenizer.DOCTYPE_TOKEN)
-        this.emit('doctype', token.name, token.publicId, token.systemId, this.currentTokenLocation);
-};
-
-SAXParser.prototype._emitPendingText = function () {
-    if (this.pendingText !== null) {
-        this.emit('text', this.pendingText, this.currentTokenLocation);
-        this.pendingText = null;
-    }
-};
-
-},{"../common/merge_options":90,"../tokenizer":105,"./dev_null_stream":100,"./parser_feedback_simulator":102,"stream":26,"util":31}],102:[function(require,module,exports){
-'use strict';
-
-var Tokenizer = require('../tokenizer'),
-    foreignContent = require('../common/foreign_content'),
-    UNICODE = require('../common/unicode'),
-    HTML = require('../common/html');
-
-
-//Aliases
-var $ = HTML.TAG_NAMES,
-    NS = HTML.NAMESPACES;
-
-
-//ParserFeedbackSimulator
-//Simulates adjustment of the Tokenizer which performed by standard parser during tree construction.
-var ParserFeedbackSimulator = module.exports = function (tokenizer) {
-    this.tokenizer = tokenizer;
-
-    this.namespaceStack = [];
-    this.namespaceStackTop = -1;
-    this._enterNamespace(NS.HTML);
-};
-
-ParserFeedbackSimulator.prototype.getNextToken = function () {
-    var token = this.tokenizer.getNextToken();
-
-    if (token.type === Tokenizer.START_TAG_TOKEN)
-        this._handleStartTagToken(token);
-
-    else if (token.type === Tokenizer.END_TAG_TOKEN)
-        this._handleEndTagToken(token);
-
-    else if (token.type === Tokenizer.NULL_CHARACTER_TOKEN && this.inForeignContent) {
-        token.type = Tokenizer.CHARACTER_TOKEN;
-        token.chars = UNICODE.REPLACEMENT_CHARACTER;
-    }
-
-    else if (this.skipNextNewLine) {
-        if (token.type !== Tokenizer.HIBERNATION_TOKEN)
-            this.skipNextNewLine = false;
-
-        if (token.type === Tokenizer.WHITESPACE_CHARACTER_TOKEN && token.chars[0] === '\n') {
-            if (token.chars.length === 1)
-                return this.getNextToken();
-
-            token.chars = token.chars.substr(1);
-        }
-    }
-
-    return token;
-};
-
-//Namespace stack mutations
-ParserFeedbackSimulator.prototype._enterNamespace = function (namespace) {
-    this.namespaceStackTop++;
-    this.namespaceStack.push(namespace);
-
-    this.inForeignContent = namespace !== NS.HTML;
-    this.currentNamespace = namespace;
-    this.tokenizer.allowCDATA = this.inForeignContent;
-};
-
-ParserFeedbackSimulator.prototype._leaveCurrentNamespace = function () {
-    this.namespaceStackTop--;
-    this.namespaceStack.pop();
-
-    this.currentNamespace = this.namespaceStack[this.namespaceStackTop];
-    this.inForeignContent = this.currentNamespace !== NS.HTML;
-    this.tokenizer.allowCDATA = this.inForeignContent;
-};
-
-//Token handlers
-ParserFeedbackSimulator.prototype._ensureTokenizerMode = function (tn) {
-    if (tn === $.TEXTAREA || tn === $.TITLE)
-        this.tokenizer.state = Tokenizer.MODE.RCDATA;
-
-    else if (tn === $.PLAINTEXT)
-        this.tokenizer.state = Tokenizer.MODE.PLAINTEXT;
-
-    else if (tn === $.SCRIPT)
-        this.tokenizer.state = Tokenizer.MODE.SCRIPT_DATA;
-
-    else if (tn === $.STYLE || tn === $.IFRAME || tn === $.XMP ||
-             tn === $.NOEMBED || tn === $.NOFRAMES || tn === $.NOSCRIPT)
-        this.tokenizer.state = Tokenizer.MODE.RAWTEXT;
-};
-
-ParserFeedbackSimulator.prototype._handleStartTagToken = function (token) {
-    var tn = token.tagName;
-
-    if (tn === $.SVG)
-        this._enterNamespace(NS.SVG);
-
-    else if (tn === $.MATH)
-        this._enterNamespace(NS.MATHML);
-
-    if (this.inForeignContent) {
-        if (foreignContent.causesExit(token)) {
-            this._leaveCurrentNamespace();
-            return;
-        }
-
-        var currentNs = this.currentNamespace;
-
-        if (currentNs === NS.MATHML)
-            foreignContent.adjustTokenMathMLAttrs(token);
-
-        else if (currentNs === NS.SVG) {
-            foreignContent.adjustTokenSVGTagName(token);
-            foreignContent.adjustTokenSVGAttrs(token);
-        }
-
-        foreignContent.adjustTokenXMLAttrs(token);
-
-        tn = token.tagName;
-
-        if (!token.selfClosing && foreignContent.isIntegrationPoint(tn, currentNs, token.attrs))
-            this._enterNamespace(NS.HTML);
-    }
-
-    else {
-        if (tn === $.PRE || tn === $.TEXTAREA || tn === $.LISTING)
-            this.skipNextNewLine = true;
-
-        else if (tn === $.IMAGE)
-            token.tagName = $.IMG;
-
-        this._ensureTokenizerMode(tn);
-    }
-};
-
-ParserFeedbackSimulator.prototype._handleEndTagToken = function (token) {
-    var tn = token.tagName;
-
-    if (!this.inForeignContent) {
-        var previousNs = this.namespaceStack[this.namespaceStackTop - 1];
-
-        if (previousNs === NS.SVG && foreignContent.SVG_TAG_NAMES_ADJUSTMENT_MAP[tn])
-            tn = foreignContent.SVG_TAG_NAMES_ADJUSTMENT_MAP[tn];
-
-        //NOTE: check for exit from integration point
-        if (foreignContent.isIntegrationPoint(tn, previousNs, token.attrs))
-            this._leaveCurrentNamespace();
-    }
-
-    else if (tn === $.SVG && this.currentNamespace === NS.SVG ||
-             tn === $.MATH && this.currentNamespace === NS.MATHML)
-        this._leaveCurrentNamespace();
-
-    // NOTE: adjust end tag name as well for consistency
-    if (this.currentNamespace === NS.SVG)
-        foreignContent.adjustTokenSVGTagName(token);
-};
-
-},{"../common/foreign_content":88,"../common/html":89,"../common/unicode":91,"../tokenizer":105}],103:[function(require,module,exports){
+},{"../common/html":67}],77:[function(require,module,exports){
 'use strict';
 
 var defaultTreeAdapter = require('../tree_adapters/default'),
+    mergeOptions = require('../utils/merge_options'),
     doctype = require('../common/doctype'),
-    mergeOptions = require('../common/merge_options'),
     HTML = require('../common/html');
 
 //Aliases
@@ -14188,41 +9241,10 @@ Serializer.prototype._serializeDocumentTypeNode = function (node) {
     this.html += '<' + doctype.serializeContent(name, null, null) + '>';
 };
 
-},{"../common/doctype":87,"../common/html":89,"../common/merge_options":90,"../tree_adapters/default":108}],104:[function(require,module,exports){
-'use strict';
-
-var ReadableStream = require('stream').Readable,
-    inherits = require('util').inherits,
-    Serializer = require('./index');
-
-var SerializerStream = module.exports = function (node, options) {
-    ReadableStream.call(this);
-
-    this.serializer = new Serializer(node, options);
-
-    Object.defineProperty(this.serializer, 'html', {
-        //NOTE: To make `+=` concat operator work properly we define
-        //getter which always returns empty string
-        get: function () {
-            return '';
-        },
-        set: this.push.bind(this)
-    });
-};
-
-inherits(SerializerStream, ReadableStream);
-
-//Readable stream implementation
-SerializerStream.prototype._read = function () {
-    this.serializer.serialize();
-    this.push(null);
-};
-
-},{"./index":103,"stream":26,"util":31}],105:[function(require,module,exports){
+},{"../common/doctype":65,"../common/html":67,"../tree_adapters/default":81,"../utils/merge_options":83}],78:[function(require,module,exports){
 'use strict';
 
 var Preprocessor = require('./preprocessor'),
-    locationInfoMixin = require('../location_info/tokenizer_mixin'),
     UNICODE = require('../common/unicode'),
     neTree = require('./named_entity_data');
 
@@ -14394,7 +9416,7 @@ function findNamedEntityTreeBranch(nodeIx, cp) {
 
 
 //Tokenizer
-var Tokenizer = module.exports = function (options) {
+var Tokenizer = module.exports = function () {
     this.preprocessor = new Preprocessor();
 
     this.tokenQueue = [];
@@ -14414,9 +9436,6 @@ var Tokenizer = module.exports = function (options) {
     this.currentCharacterToken = null;
     this.currentToken = null;
     this.currentAttr = null;
-
-    if (options && options.locationInfo)
-        locationInfoMixin.assign(this);
 };
 
 //Token types
@@ -14431,7 +9450,7 @@ Tokenizer.EOF_TOKEN = 'EOF_TOKEN';
 Tokenizer.HIBERNATION_TOKEN = 'HIBERNATION_TOKEN';
 
 //Tokenizer initial states for different modes
-Tokenizer.MODE = Tokenizer.prototype.MODE = {
+Tokenizer.MODE = {
     DATA: DATA_STATE,
     RCDATA: RCDATA_STATE,
     RAWTEXT: RAWTEXT_STATE,
@@ -16368,13 +11387,13 @@ _[CDATA_SECTION_STATE] = function cdataSectionState(cp) {
     }
 };
 
-},{"../common/unicode":91,"../location_info/tokenizer_mixin":94,"./named_entity_data":106,"./preprocessor":107}],106:[function(require,module,exports){
+},{"../common/unicode":68,"./named_entity_data":79,"./preprocessor":80}],79:[function(require,module,exports){
 'use strict';
 
 //NOTE: this file contains auto-generated array mapped radix tree that is used for the named entity references consumption
 //(details: https://github.com/inikulin/parse5/tree/master/scripts/generate_named_entity_data/README.md)
 module.exports = new Uint16Array([4,52,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,106,303,412,810,1432,1701,1796,1987,2114,2360,2420,2484,3170,3251,4140,4393,4575,4610,5106,5512,5728,6117,6274,6315,6345,6427,6516,7002,7910,8733,9323,9870,10170,10631,10893,11318,11386,11467,12773,13092,14474,14922,15448,15542,16419,17666,18166,18611,19004,19095,19298,19397,4,16,69,77,97,98,99,102,103,108,109,110,111,112,114,115,116,117,140,150,158,169,176,194,199,210,216,222,226,242,256,266,283,294,108,105,103,5,198,1,59,148,1,198,80,5,38,1,59,156,1,38,99,117,116,101,5,193,1,59,167,1,193,114,101,118,101,59,1,258,4,2,105,121,182,191,114,99,5,194,1,59,189,1,194,59,1,1040,114,59,3,55349,56580,114,97,118,101,5,192,1,59,208,1,192,112,104,97,59,1,913,97,99,114,59,1,256,100,59,1,10835,4,2,103,112,232,237,111,110,59,1,260,102,59,3,55349,56632,112,108,121,70,117,110,99,116,105,111,110,59,1,8289,105,110,103,5,197,1,59,264,1,197,4,2,99,115,272,277,114,59,3,55349,56476,105,103,110,59,1,8788,105,108,100,101,5,195,1,59,292,1,195,109,108,5,196,1,59,301,1,196,4,8,97,99,101,102,111,114,115,117,321,350,354,383,388,394,400,405,4,2,99,114,327,336,107,115,108,97,115,104,59,1,8726,4,2,118,119,342,345,59,1,10983,101,100,59,1,8966,121,59,1,1041,4,3,99,114,116,362,369,379,97,117,115,101,59,1,8757,110,111,117,108,108,105,115,59,1,8492,97,59,1,914,114,59,3,55349,56581,112,102,59,3,55349,56633,101,118,101,59,1,728,99,114,59,1,8492,109,112,101,113,59,1,8782,4,14,72,79,97,99,100,101,102,104,105,108,111,114,115,117,442,447,456,504,542,547,569,573,577,616,678,784,790,796,99,121,59,1,1063,80,89,5,169,1,59,454,1,169,4,3,99,112,121,464,470,497,117,116,101,59,1,262,4,2,59,105,476,478,1,8914,116,97,108,68,105,102,102,101,114,101,110,116,105,97,108,68,59,1,8517,108,101,121,115,59,1,8493,4,4,97,101,105,111,514,520,530,535,114,111,110,59,1,268,100,105,108,5,199,1,59,528,1,199,114,99,59,1,264,110,105,110,116,59,1,8752,111,116,59,1,266,4,2,100,110,553,560,105,108,108,97,59,1,184,116,101,114,68,111,116,59,1,183,114,59,1,8493,105,59,1,935,114,99,108,101,4,4,68,77,80,84,591,596,603,609,111,116,59,1,8857,105,110,117,115,59,1,8854,108,117,115,59,1,8853,105,109,101,115,59,1,8855,111,4,2,99,115,623,646,107,119,105,115,101,67,111,110,116,111,117,114,73,110,116,101,103,114,97,108,59,1,8754,101,67,117,114,108,121,4,2,68,81,658,671,111,117,98,108,101,81,117,111,116,101,59,1,8221,117,111,116,101,59,1,8217,4,4,108,110,112,117,688,701,736,753,111,110,4,2,59,101,696,698,1,8759,59,1,10868,4,3,103,105,116,709,717,722,114,117,101,110,116,59,1,8801,110,116,59,1,8751,111,117,114,73,110,116,101,103,114,97,108,59,1,8750,4,2,102,114,742,745,59,1,8450,111,100,117,99,116,59,1,8720,110,116,101,114,67,108,111,99,107,119,105,115,101,67,111,110,116,111,117,114,73,110,116,101,103,114,97,108,59,1,8755,111,115,115,59,1,10799,99,114,59,3,55349,56478,112,4,2,59,67,803,805,1,8915,97,112,59,1,8781,4,11,68,74,83,90,97,99,101,102,105,111,115,834,850,855,860,865,888,903,916,921,1011,1415,4,2,59,111,840,842,1,8517,116,114,97,104,100,59,1,10513,99,121,59,1,1026,99,121,59,1,1029,99,121,59,1,1039,4,3,103,114,115,873,879,883,103,101,114,59,1,8225,114,59,1,8609,104,118,59,1,10980,4,2,97,121,894,900,114,111,110,59,1,270,59,1,1044,108,4,2,59,116,910,912,1,8711,97,59,1,916,114,59,3,55349,56583,4,2,97,102,927,998,4,2,99,109,933,992,114,105,116,105,99,97,108,4,4,65,68,71,84,950,957,978,985,99,117,116,101,59,1,180,111,4,2,116,117,964,967,59,1,729,98,108,101,65,99,117,116,101,59,1,733,114,97,118,101,59,1,96,105,108,100,101,59,1,732,111,110,100,59,1,8900,102,101,114,101,110,116,105,97,108,68,59,1,8518,4,4,112,116,117,119,1021,1026,1048,1249,102,59,3,55349,56635,4,3,59,68,69,1034,1036,1041,1,168,111,116,59,1,8412,113,117,97,108,59,1,8784,98,108,101,4,6,67,68,76,82,85,86,1065,1082,1101,1189,1211,1236,111,110,116,111,117,114,73,110,116,101,103,114,97,108,59,1,8751,111,4,2,116,119,1089,1092,59,1,168,110,65,114,114,111,119,59,1,8659,4,2,101,111,1107,1141,102,116,4,3,65,82,84,1117,1124,1136,114,114,111,119,59,1,8656,105,103,104,116,65,114,114,111,119,59,1,8660,101,101,59,1,10980,110,103,4,2,76,82,1149,1177,101,102,116,4,2,65,82,1158,1165,114,114,111,119,59,1,10232,105,103,104,116,65,114,114,111,119,59,1,10234,105,103,104,116,65,114,114,111,119,59,1,10233,105,103,104,116,4,2,65,84,1199,1206,114,114,111,119,59,1,8658,101,101,59,1,8872,112,4,2,65,68,1218,1225,114,114,111,119,59,1,8657,111,119,110,65,114,114,111,119,59,1,8661,101,114,116,105,99,97,108,66,97,114,59,1,8741,110,4,6,65,66,76,82,84,97,1264,1292,1299,1352,1391,1408,114,114,111,119,4,3,59,66,85,1276,1278,1283,1,8595,97,114,59,1,10515,112,65,114,114,111,119,59,1,8693,114,101,118,101,59,1,785,101,102,116,4,3,82,84,86,1310,1323,1334,105,103,104,116,86,101,99,116,111,114,59,1,10576,101,101,86,101,99,116,111,114,59,1,10590,101,99,116,111,114,4,2,59,66,1345,1347,1,8637,97,114,59,1,10582,105,103,104,116,4,2,84,86,1362,1373,101,101,86,101,99,116,111,114,59,1,10591,101,99,116,111,114,4,2,59,66,1384,1386,1,8641,97,114,59,1,10583,101,101,4,2,59,65,1399,1401,1,8868,114,114,111,119,59,1,8615,114,114,111,119,59,1,8659,4,2,99,116,1421,1426,114,59,3,55349,56479,114,111,107,59,1,272,4,16,78,84,97,99,100,102,103,108,109,111,112,113,115,116,117,120,1466,1470,1478,1489,1515,1520,1525,1536,1544,1593,1609,1617,1650,1664,1668,1677,71,59,1,330,72,5,208,1,59,1476,1,208,99,117,116,101,5,201,1,59,1487,1,201,4,3,97,105,121,1497,1503,1512,114,111,110,59,1,282,114,99,5,202,1,59,1510,1,202,59,1,1069,111,116,59,1,278,114,59,3,55349,56584,114,97,118,101,5,200,1,59,1534,1,200,101,109,101,110,116,59,1,8712,4,2,97,112,1550,1555,99,114,59,1,274,116,121,4,2,83,86,1563,1576,109,97,108,108,83,113,117,97,114,101,59,1,9723,101,114,121,83,109,97,108,108,83,113,117,97,114,101,59,1,9643,4,2,103,112,1599,1604,111,110,59,1,280,102,59,3,55349,56636,115,105,108,111,110,59,1,917,117,4,2,97,105,1624,1640,108,4,2,59,84,1631,1633,1,10869,105,108,100,101,59,1,8770,108,105,98,114,105,117,109,59,1,8652,4,2,99,105,1656,1660,114,59,1,8496,109,59,1,10867,97,59,1,919,109,108,5,203,1,59,1675,1,203,4,2,105,112,1683,1689,115,116,115,59,1,8707,111,110,101,110,116,105,97,108,69,59,1,8519,4,5,99,102,105,111,115,1713,1717,1722,1762,1791,121,59,1,1060,114,59,3,55349,56585,108,108,101,100,4,2,83,86,1732,1745,109,97,108,108,83,113,117,97,114,101,59,1,9724,101,114,121,83,109,97,108,108,83,113,117,97,114,101,59,1,9642,4,3,112,114,117,1770,1775,1781,102,59,3,55349,56637,65,108,108,59,1,8704,114,105,101,114,116,114,102,59,1,8497,99,114,59,1,8497,4,12,74,84,97,98,99,100,102,103,111,114,115,116,1822,1827,1834,1848,1855,1877,1882,1887,1890,1896,1978,1984,99,121,59,1,1027,5,62,1,59,1832,1,62,109,109,97,4,2,59,100,1843,1845,1,915,59,1,988,114,101,118,101,59,1,286,4,3,101,105,121,1863,1869,1874,100,105,108,59,1,290,114,99,59,1,284,59,1,1043,111,116,59,1,288,114,59,3,55349,56586,59,1,8921,112,102,59,3,55349,56638,101,97,116,101,114,4,6,69,70,71,76,83,84,1915,1933,1944,1953,1959,1971,113,117,97,108,4,2,59,76,1925,1927,1,8805,101,115,115,59,1,8923,117,108,108,69,113,117,97,108,59,1,8807,114,101,97,116,101,114,59,1,10914,101,115,115,59,1,8823,108,97,110,116,69,113,117,97,108,59,1,10878,105,108,100,101,59,1,8819,99,114,59,3,55349,56482,59,1,8811,4,8,65,97,99,102,105,111,115,117,2005,2012,2026,2032,2036,2049,2073,2089,82,68,99,121,59,1,1066,4,2,99,116,2018,2023,101,107,59,1,711,59,1,94,105,114,99,59,1,292,114,59,1,8460,108,98,101,114,116,83,112,97,99,101,59,1,8459,4,2,112,114,2055,2059,102,59,1,8461,105,122,111,110,116,97,108,76,105,110,101,59,1,9472,4,2,99,116,2079,2083,114,59,1,8459,114,111,107,59,1,294,109,112,4,2,68,69,2097,2107,111,119,110,72,117,109,112,59,1,8782,113,117,97,108,59,1,8783,4,14,69,74,79,97,99,100,102,103,109,110,111,115,116,117,2144,2149,2155,2160,2171,2189,2194,2198,2209,2245,2307,2329,2334,2341,99,121,59,1,1045,108,105,103,59,1,306,99,121,59,1,1025,99,117,116,101,5,205,1,59,2169,1,205,4,2,105,121,2177,2186,114,99,5,206,1,59,2184,1,206,59,1,1048,111,116,59,1,304,114,59,1,8465,114,97,118,101,5,204,1,59,2207,1,204,4,3,59,97,112,2217,2219,2238,1,8465,4,2,99,103,2225,2229,114,59,1,298,105,110,97,114,121,73,59,1,8520,108,105,101,115,59,1,8658,4,2,116,118,2251,2281,4,2,59,101,2257,2259,1,8748,4,2,103,114,2265,2271,114,97,108,59,1,8747,115,101,99,116,105,111,110,59,1,8898,105,115,105,98,108,101,4,2,67,84,2293,2300,111,109,109,97,59,1,8291,105,109,101,115,59,1,8290,4,3,103,112,116,2315,2320,2325,111,110,59,1,302,102,59,3,55349,56640,97,59,1,921,99,114,59,1,8464,105,108,100,101,59,1,296,4,2,107,109,2347,2352,99,121,59,1,1030,108,5,207,1,59,2358,1,207,4,5,99,102,111,115,117,2372,2386,2391,2397,2414,4,2,105,121,2378,2383,114,99,59,1,308,59,1,1049,114,59,3,55349,56589,112,102,59,3,55349,56641,4,2,99,101,2403,2408,114,59,3,55349,56485,114,99,121,59,1,1032,107,99,121,59,1,1028,4,7,72,74,97,99,102,111,115,2436,2441,2446,2452,2467,2472,2478,99,121,59,1,1061,99,121,59,1,1036,112,112,97,59,1,922,4,2,101,121,2458,2464,100,105,108,59,1,310,59,1,1050,114,59,3,55349,56590,112,102,59,3,55349,56642,99,114,59,3,55349,56486,4,11,74,84,97,99,101,102,108,109,111,115,116,2508,2513,2520,2562,2585,2981,2986,3004,3011,3146,3167,99,121,59,1,1033,5,60,1,59,2518,1,60,4,5,99,109,110,112,114,2532,2538,2544,2548,2558,117,116,101,59,1,313,98,100,97,59,1,923,103,59,1,10218,108,97,99,101,116,114,102,59,1,8466,114,59,1,8606,4,3,97,101,121,2570,2576,2582,114,111,110,59,1,317,100,105,108,59,1,315,59,1,1051,4,2,102,115,2591,2907,116,4,10,65,67,68,70,82,84,85,86,97,114,2614,2663,2672,2728,2735,2760,2820,2870,2888,2895,4,2,110,114,2620,2633,103,108,101,66,114,97,99,107,101,116,59,1,10216,114,111,119,4,3,59,66,82,2644,2646,2651,1,8592,97,114,59,1,8676,105,103,104,116,65,114,114,111,119,59,1,8646,101,105,108,105,110,103,59,1,8968,111,4,2,117,119,2679,2692,98,108,101,66,114,97,99,107,101,116,59,1,10214,110,4,2,84,86,2699,2710,101,101,86,101,99,116,111,114,59,1,10593,101,99,116,111,114,4,2,59,66,2721,2723,1,8643,97,114,59,1,10585,108,111,111,114,59,1,8970,105,103,104,116,4,2,65,86,2745,2752,114,114,111,119,59,1,8596,101,99,116,111,114,59,1,10574,4,2,101,114,2766,2792,101,4,3,59,65,86,2775,2777,2784,1,8867,114,114,111,119,59,1,8612,101,99,116,111,114,59,1,10586,105,97,110,103,108,101,4,3,59,66,69,2806,2808,2813,1,8882,97,114,59,1,10703,113,117,97,108,59,1,8884,112,4,3,68,84,86,2829,2841,2852,111,119,110,86,101,99,116,111,114,59,1,10577,101,101,86,101,99,116,111,114,59,1,10592,101,99,116,111,114,4,2,59,66,2863,2865,1,8639,97,114,59,1,10584,101,99,116,111,114,4,2,59,66,2881,2883,1,8636,97,114,59,1,10578,114,114,111,119,59,1,8656,105,103,104,116,97,114,114,111,119,59,1,8660,115,4,6,69,70,71,76,83,84,2922,2936,2947,2956,2962,2974,113,117,97,108,71,114,101,97,116,101,114,59,1,8922,117,108,108,69,113,117,97,108,59,1,8806,114,101,97,116,101,114,59,1,8822,101,115,115,59,1,10913,108,97,110,116,69,113,117,97,108,59,1,10877,105,108,100,101,59,1,8818,114,59,3,55349,56591,4,2,59,101,2992,2994,1,8920,102,116,97,114,114,111,119,59,1,8666,105,100,111,116,59,1,319,4,3,110,112,119,3019,3110,3115,103,4,4,76,82,108,114,3030,3058,3070,3098,101,102,116,4,2,65,82,3039,3046,114,114,111,119,59,1,10229,105,103,104,116,65,114,114,111,119,59,1,10231,105,103,104,116,65,114,114,111,119,59,1,10230,101,102,116,4,2,97,114,3079,3086,114,114,111,119,59,1,10232,105,103,104,116,97,114,114,111,119,59,1,10234,105,103,104,116,97,114,114,111,119,59,1,10233,102,59,3,55349,56643,101,114,4,2,76,82,3123,3134,101,102,116,65,114,114,111,119,59,1,8601,105,103,104,116,65,114,114,111,119,59,1,8600,4,3,99,104,116,3154,3158,3161,114,59,1,8466,59,1,8624,114,111,107,59,1,321,59,1,8810,4,8,97,99,101,102,105,111,115,117,3188,3192,3196,3222,3227,3237,3243,3248,112,59,1,10501,121,59,1,1052,4,2,100,108,3202,3213,105,117,109,83,112,97,99,101,59,1,8287,108,105,110,116,114,102,59,1,8499,114,59,3,55349,56592,110,117,115,80,108,117,115,59,1,8723,112,102,59,3,55349,56644,99,114,59,1,8499,59,1,924,4,9,74,97,99,101,102,111,115,116,117,3271,3276,3283,3306,3422,3427,4120,4126,4137,99,121,59,1,1034,99,117,116,101,59,1,323,4,3,97,101,121,3291,3297,3303,114,111,110,59,1,327,100,105,108,59,1,325,59,1,1053,4,3,103,115,119,3314,3380,3415,97,116,105,118,101,4,3,77,84,86,3327,3340,3365,101,100,105,117,109,83,112,97,99,101,59,1,8203,104,105,4,2,99,110,3348,3357,107,83,112,97,99,101,59,1,8203,83,112,97,99,101,59,1,8203,101,114,121,84,104,105,110,83,112,97,99,101,59,1,8203,116,101,100,4,2,71,76,3389,3405,114,101,97,116,101,114,71,114,101,97,116,101,114,59,1,8811,101,115,115,76,101,115,115,59,1,8810,76,105,110,101,59,1,10,114,59,3,55349,56593,4,4,66,110,112,116,3437,3444,3460,3464,114,101,97,107,59,1,8288,66,114,101,97,107,105,110,103,83,112,97,99,101,59,1,160,102,59,1,8469,4,13,59,67,68,69,71,72,76,78,80,82,83,84,86,3492,3494,3517,3536,3578,3657,3685,3784,3823,3860,3915,4066,4107,1,10988,4,2,111,117,3500,3510,110,103,114,117,101,110,116,59,1,8802,112,67,97,112,59,1,8813,111,117,98,108,101,86,101,114,116,105,99,97,108,66,97,114,59,1,8742,4,3,108,113,120,3544,3552,3571,101,109,101,110,116,59,1,8713,117,97,108,4,2,59,84,3561,3563,1,8800,105,108,100,101,59,3,8770,824,105,115,116,115,59,1,8708,114,101,97,116,101,114,4,7,59,69,70,71,76,83,84,3600,3602,3609,3621,3631,3637,3650,1,8815,113,117,97,108,59,1,8817,117,108,108,69,113,117,97,108,59,3,8807,824,114,101,97,116,101,114,59,3,8811,824,101,115,115,59,1,8825,108,97,110,116,69,113,117,97,108,59,3,10878,824,105,108,100,101,59,1,8821,117,109,112,4,2,68,69,3666,3677,111,119,110,72,117,109,112,59,3,8782,824,113,117,97,108,59,3,8783,824,101,4,2,102,115,3692,3724,116,84,114,105,97,110,103,108,101,4,3,59,66,69,3709,3711,3717,1,8938,97,114,59,3,10703,824,113,117,97,108,59,1,8940,115,4,6,59,69,71,76,83,84,3739,3741,3748,3757,3764,3777,1,8814,113,117,97,108,59,1,8816,114,101,97,116,101,114,59,1,8824,101,115,115,59,3,8810,824,108,97,110,116,69,113,117,97,108,59,3,10877,824,105,108,100,101,59,1,8820,101,115,116,101,100,4,2,71,76,3795,3812,114,101,97,116,101,114,71,114,101,97,116,101,114,59,3,10914,824,101,115,115,76,101,115,115,59,3,10913,824,114,101,99,101,100,101,115,4,3,59,69,83,3838,3840,3848,1,8832,113,117,97,108,59,3,10927,824,108,97,110,116,69,113,117,97,108,59,1,8928,4,2,101,105,3866,3881,118,101,114,115,101,69,108,101,109,101,110,116,59,1,8716,103,104,116,84,114,105,97,110,103,108,101,4,3,59,66,69,3900,3902,3908,1,8939,97,114,59,3,10704,824,113,117,97,108,59,1,8941,4,2,113,117,3921,3973,117,97,114,101,83,117,4,2,98,112,3933,3952,115,101,116,4,2,59,69,3942,3945,3,8847,824,113,117,97,108,59,1,8930,101,114,115,101,116,4,2,59,69,3963,3966,3,8848,824,113,117,97,108,59,1,8931,4,3,98,99,112,3981,4000,4045,115,101,116,4,2,59,69,3990,3993,3,8834,8402,113,117,97,108,59,1,8840,99,101,101,100,115,4,4,59,69,83,84,4015,4017,4025,4037,1,8833,113,117,97,108,59,3,10928,824,108,97,110,116,69,113,117,97,108,59,1,8929,105,108,100,101,59,3,8831,824,101,114,115,101,116,4,2,59,69,4056,4059,3,8835,8402,113,117,97,108,59,1,8841,105,108,100,101,4,4,59,69,70,84,4080,4082,4089,4100,1,8769,113,117,97,108,59,1,8772,117,108,108,69,113,117,97,108,59,1,8775,105,108,100,101,59,1,8777,101,114,116,105,99,97,108,66,97,114,59,1,8740,99,114,59,3,55349,56489,105,108,100,101,5,209,1,59,4135,1,209,59,1,925,4,14,69,97,99,100,102,103,109,111,112,114,115,116,117,118,4170,4176,4187,4205,4212,4217,4228,4253,4259,4292,4295,4316,4337,4346,108,105,103,59,1,338,99,117,116,101,5,211,1,59,4185,1,211,4,2,105,121,4193,4202,114,99,5,212,1,59,4200,1,212,59,1,1054,98,108,97,99,59,1,336,114,59,3,55349,56594,114,97,118,101,5,210,1,59,4226,1,210,4,3,97,101,105,4236,4241,4246,99,114,59,1,332,103,97,59,1,937,99,114,111,110,59,1,927,112,102,59,3,55349,56646,101,110,67,117,114,108,121,4,2,68,81,4272,4285,111,117,98,108,101,81,117,111,116,101,59,1,8220,117,111,116,101,59,1,8216,59,1,10836,4,2,99,108,4301,4306,114,59,3,55349,56490,97,115,104,5,216,1,59,4314,1,216,105,4,2,108,109,4323,4332,100,101,5,213,1,59,4330,1,213,101,115,59,1,10807,109,108,5,214,1,59,4344,1,214,101,114,4,2,66,80,4354,4380,4,2,97,114,4360,4364,114,59,1,8254,97,99,4,2,101,107,4372,4375,59,1,9182,101,116,59,1,9140,97,114,101,110,116,104,101,115,105,115,59,1,9180,4,9,97,99,102,104,105,108,111,114,115,4413,4422,4426,4431,4435,4438,4448,4471,4561,114,116,105,97,108,68,59,1,8706,121,59,1,1055,114,59,3,55349,56595,105,59,1,934,59,1,928,117,115,77,105,110,117,115,59,1,177,4,2,105,112,4454,4467,110,99,97,114,101,112,108,97,110,101,59,1,8460,102,59,1,8473,4,4,59,101,105,111,4481,4483,4526,4531,1,10939,99,101,100,101,115,4,4,59,69,83,84,4498,4500,4507,4519,1,8826,113,117,97,108,59,1,10927,108,97,110,116,69,113,117,97,108,59,1,8828,105,108,100,101,59,1,8830,109,101,59,1,8243,4,2,100,112,4537,4543,117,99,116,59,1,8719,111,114,116,105,111,110,4,2,59,97,4555,4557,1,8759,108,59,1,8733,4,2,99,105,4567,4572,114,59,3,55349,56491,59,1,936,4,4,85,102,111,115,4585,4594,4599,4604,79,84,5,34,1,59,4592,1,34,114,59,3,55349,56596,112,102,59,1,8474,99,114,59,3,55349,56492,4,12,66,69,97,99,101,102,104,105,111,114,115,117,4636,4642,4650,4681,4704,4763,4767,4771,5047,5069,5081,5094,97,114,114,59,1,10512,71,5,174,1,59,4648,1,174,4,3,99,110,114,4658,4664,4668,117,116,101,59,1,340,103,59,1,10219,114,4,2,59,116,4675,4677,1,8608,108,59,1,10518,4,3,97,101,121,4689,4695,4701,114,111,110,59,1,344,100,105,108,59,1,342,59,1,1056,4,2,59,118,4710,4712,1,8476,101,114,115,101,4,2,69,85,4722,4748,4,2,108,113,4728,4736,101,109,101,110,116,59,1,8715,117,105,108,105,98,114,105,117,109,59,1,8651,112,69,113,117,105,108,105,98,114,105,117,109,59,1,10607,114,59,1,8476,111,59,1,929,103,104,116,4,8,65,67,68,70,84,85,86,97,4792,4840,4849,4905,4912,4972,5022,5040,4,2,110,114,4798,4811,103,108,101,66,114,97,99,107,101,116,59,1,10217,114,111,119,4,3,59,66,76,4822,4824,4829,1,8594,97,114,59,1,8677,101,102,116,65,114,114,111,119,59,1,8644,101,105,108,105,110,103,59,1,8969,111,4,2,117,119,4856,4869,98,108,101,66,114,97,99,107,101,116,59,1,10215,110,4,2,84,86,4876,4887,101,101,86,101,99,116,111,114,59,1,10589,101,99,116,111,114,4,2,59,66,4898,4900,1,8642,97,114,59,1,10581,108,111,111,114,59,1,8971,4,2,101,114,4918,4944,101,4,3,59,65,86,4927,4929,4936,1,8866,114,114,111,119,59,1,8614,101,99,116,111,114,59,1,10587,105,97,110,103,108,101,4,3,59,66,69,4958,4960,4965,1,8883,97,114,59,1,10704,113,117,97,108,59,1,8885,112,4,3,68,84,86,4981,4993,5004,111,119,110,86,101,99,116,111,114,59,1,10575,101,101,86,101,99,116,111,114,59,1,10588,101,99,116,111,114,4,2,59,66,5015,5017,1,8638,97,114,59,1,10580,101,99,116,111,114,4,2,59,66,5033,5035,1,8640,97,114,59,1,10579,114,114,111,119,59,1,8658,4,2,112,117,5053,5057,102,59,1,8477,110,100,73,109,112,108,105,101,115,59,1,10608,105,103,104,116,97,114,114,111,119,59,1,8667,4,2,99,104,5087,5091,114,59,1,8475,59,1,8625,108,101,68,101,108,97,121,101,100,59,1,10740,4,13,72,79,97,99,102,104,105,109,111,113,115,116,117,5134,5150,5157,5164,5198,5203,5259,5265,5277,5283,5374,5380,5385,4,2,67,99,5140,5146,72,99,121,59,1,1065,121,59,1,1064,70,84,99,121,59,1,1068,99,117,116,101,59,1,346,4,5,59,97,101,105,121,5176,5178,5184,5190,5195,1,10940,114,111,110,59,1,352,100,105,108,59,1,350,114,99,59,1,348,59,1,1057,114,59,3,55349,56598,111,114,116,4,4,68,76,82,85,5216,5227,5238,5250,111,119,110,65,114,114,111,119,59,1,8595,101,102,116,65,114,114,111,119,59,1,8592,105,103,104,116,65,114,114,111,119,59,1,8594,112,65,114,114,111,119,59,1,8593,103,109,97,59,1,931,97,108,108,67,105,114,99,108,101,59,1,8728,112,102,59,3,55349,56650,4,2,114,117,5289,5293,116,59,1,8730,97,114,101,4,4,59,73,83,85,5306,5308,5322,5367,1,9633,110,116,101,114,115,101,99,116,105,111,110,59,1,8851,117,4,2,98,112,5329,5347,115,101,116,4,2,59,69,5338,5340,1,8847,113,117,97,108,59,1,8849,101,114,115,101,116,4,2,59,69,5358,5360,1,8848,113,117,97,108,59,1,8850,110,105,111,110,59,1,8852,99,114,59,3,55349,56494,97,114,59,1,8902,4,4,98,99,109,112,5395,5420,5475,5478,4,2,59,115,5401,5403,1,8912,101,116,4,2,59,69,5411,5413,1,8912,113,117,97,108,59,1,8838,4,2,99,104,5426,5468,101,101,100,115,4,4,59,69,83,84,5440,5442,5449,5461,1,8827,113,117,97,108,59,1,10928,108,97,110,116,69,113,117,97,108,59,1,8829,105,108,100,101,59,1,8831,84,104,97,116,59,1,8715,59,1,8721,4,3,59,101,115,5486,5488,5507,1,8913,114,115,101,116,4,2,59,69,5498,5500,1,8835,113,117,97,108,59,1,8839,101,116,59,1,8913,4,11,72,82,83,97,99,102,104,105,111,114,115,5536,5546,5552,5567,5579,5602,5607,5655,5695,5701,5711,79,82,78,5,222,1,59,5544,1,222,65,68,69,59,1,8482,4,2,72,99,5558,5563,99,121,59,1,1035,121,59,1,1062,4,2,98,117,5573,5576,59,1,9,59,1,932,4,3,97,101,121,5587,5593,5599,114,111,110,59,1,356,100,105,108,59,1,354,59,1,1058,114,59,3,55349,56599,4,2,101,105,5613,5631,4,2,114,116,5619,5627,101,102,111,114,101,59,1,8756,97,59,1,920,4,2,99,110,5637,5647,107,83,112,97,99,101,59,3,8287,8202,83,112,97,99,101,59,1,8201,108,100,101,4,4,59,69,70,84,5668,5670,5677,5688,1,8764,113,117,97,108,59,1,8771,117,108,108,69,113,117,97,108,59,1,8773,105,108,100,101,59,1,8776,112,102,59,3,55349,56651,105,112,108,101,68,111,116,59,1,8411,4,2,99,116,5717,5722,114,59,3,55349,56495,114,111,107,59,1,358,4,14,97,98,99,100,102,103,109,110,111,112,114,115,116,117,5758,5789,5805,5823,5830,5835,5846,5852,5921,5937,6089,6095,6101,6108,4,2,99,114,5764,5774,117,116,101,5,218,1,59,5772,1,218,114,4,2,59,111,5781,5783,1,8607,99,105,114,59,1,10569,114,4,2,99,101,5796,5800,121,59,1,1038,118,101,59,1,364,4,2,105,121,5811,5820,114,99,5,219,1,59,5818,1,219,59,1,1059,98,108,97,99,59,1,368,114,59,3,55349,56600,114,97,118,101,5,217,1,59,5844,1,217,97,99,114,59,1,362,4,2,100,105,5858,5905,101,114,4,2,66,80,5866,5892,4,2,97,114,5872,5876,114,59,1,95,97,99,4,2,101,107,5884,5887,59,1,9183,101,116,59,1,9141,97,114,101,110,116,104,101,115,105,115,59,1,9181,111,110,4,2,59,80,5913,5915,1,8899,108,117,115,59,1,8846,4,2,103,112,5927,5932,111,110,59,1,370,102,59,3,55349,56652,4,8,65,68,69,84,97,100,112,115,5955,5985,5996,6009,6026,6033,6044,6075,114,114,111,119,4,3,59,66,68,5967,5969,5974,1,8593,97,114,59,1,10514,111,119,110,65,114,114,111,119,59,1,8645,111,119,110,65,114,114,111,119,59,1,8597,113,117,105,108,105,98,114,105,117,109,59,1,10606,101,101,4,2,59,65,6017,6019,1,8869,114,114,111,119,59,1,8613,114,114,111,119,59,1,8657,111,119,110,97,114,114,111,119,59,1,8661,101,114,4,2,76,82,6052,6063,101,102,116,65,114,114,111,119,59,1,8598,105,103,104,116,65,114,114,111,119,59,1,8599,105,4,2,59,108,6082,6084,1,978,111,110,59,1,933,105,110,103,59,1,366,99,114,59,3,55349,56496,105,108,100,101,59,1,360,109,108,5,220,1,59,6115,1,220,4,9,68,98,99,100,101,102,111,115,118,6137,6143,6148,6152,6166,6250,6255,6261,6267,97,115,104,59,1,8875,97,114,59,1,10987,121,59,1,1042,97,115,104,4,2,59,108,6161,6163,1,8873,59,1,10982,4,2,101,114,6172,6175,59,1,8897,4,3,98,116,121,6183,6188,6238,97,114,59,1,8214,4,2,59,105,6194,6196,1,8214,99,97,108,4,4,66,76,83,84,6209,6214,6220,6231,97,114,59,1,8739,105,110,101,59,1,124,101,112,97,114,97,116,111,114,59,1,10072,105,108,100,101,59,1,8768,84,104,105,110,83,112,97,99,101,59,1,8202,114,59,3,55349,56601,112,102,59,3,55349,56653,99,114,59,3,55349,56497,100,97,115,104,59,1,8874,4,5,99,101,102,111,115,6286,6292,6298,6303,6309,105,114,99,59,1,372,100,103,101,59,1,8896,114,59,3,55349,56602,112,102,59,3,55349,56654,99,114,59,3,55349,56498,4,4,102,105,111,115,6325,6330,6333,6339,114,59,3,55349,56603,59,1,926,112,102,59,3,55349,56655,99,114,59,3,55349,56499,4,9,65,73,85,97,99,102,111,115,117,6365,6370,6375,6380,6391,6405,6410,6416,6422,99,121,59,1,1071,99,121,59,1,1031,99,121,59,1,1070,99,117,116,101,5,221,1,59,6389,1,221,4,2,105,121,6397,6402,114,99,59,1,374,59,1,1067,114,59,3,55349,56604,112,102,59,3,55349,56656,99,114,59,3,55349,56500,109,108,59,1,376,4,8,72,97,99,100,101,102,111,115,6445,6450,6457,6472,6477,6501,6505,6510,99,121,59,1,1046,99,117,116,101,59,1,377,4,2,97,121,6463,6469,114,111,110,59,1,381,59,1,1047,111,116,59,1,379,4,2,114,116,6483,6497,111,87,105,100,116,104,83,112,97,99,101,59,1,8203,97,59,1,918,114,59,1,8488,112,102,59,1,8484,99,114,59,3,55349,56501,4,16,97,98,99,101,102,103,108,109,110,111,112,114,115,116,117,119,6550,6561,6568,6612,6622,6634,6645,6672,6699,6854,6870,6923,6933,6963,6974,6983,99,117,116,101,5,225,1,59,6559,1,225,114,101,118,101,59,1,259,4,6,59,69,100,105,117,121,6582,6584,6588,6591,6600,6609,1,8766,59,3,8766,819,59,1,8767,114,99,5,226,1,59,6598,1,226,116,101,5,180,1,59,6607,1,180,59,1,1072,108,105,103,5,230,1,59,6620,1,230,4,2,59,114,6628,6630,1,8289,59,3,55349,56606,114,97,118,101,5,224,1,59,6643,1,224,4,2,101,112,6651,6667,4,2,102,112,6657,6663,115,121,109,59,1,8501,104,59,1,8501,104,97,59,1,945,4,2,97,112,6678,6692,4,2,99,108,6684,6688,114,59,1,257,103,59,1,10815,5,38,1,59,6697,1,38,4,2,100,103,6705,6737,4,5,59,97,100,115,118,6717,6719,6724,6727,6734,1,8743,110,100,59,1,10837,59,1,10844,108,111,112,101,59,1,10840,59,1,10842,4,7,59,101,108,109,114,115,122,6753,6755,6758,6762,6814,6835,6848,1,8736,59,1,10660,101,59,1,8736,115,100,4,2,59,97,6770,6772,1,8737,4,8,97,98,99,100,101,102,103,104,6790,6793,6796,6799,6802,6805,6808,6811,59,1,10664,59,1,10665,59,1,10666,59,1,10667,59,1,10668,59,1,10669,59,1,10670,59,1,10671,116,4,2,59,118,6821,6823,1,8735,98,4,2,59,100,6830,6832,1,8894,59,1,10653,4,2,112,116,6841,6845,104,59,1,8738,59,1,197,97,114,114,59,1,9084,4,2,103,112,6860,6865,111,110,59,1,261,102,59,3,55349,56658,4,7,59,69,97,101,105,111,112,6886,6888,6891,6897,6900,6904,6908,1,8776,59,1,10864,99,105,114,59,1,10863,59,1,8778,100,59,1,8779,115,59,1,39,114,111,120,4,2,59,101,6917,6919,1,8776,113,59,1,8778,105,110,103,5,229,1,59,6931,1,229,4,3,99,116,121,6941,6946,6949,114,59,3,55349,56502,59,1,42,109,112,4,2,59,101,6957,6959,1,8776,113,59,1,8781,105,108,100,101,5,227,1,59,6972,1,227,109,108,5,228,1,59,6981,1,228,4,2,99,105,6989,6997,111,110,105,110,116,59,1,8755,110,116,59,1,10769,4,16,78,97,98,99,100,101,102,105,107,108,110,111,112,114,115,117,7036,7041,7119,7135,7149,7155,7219,7224,7347,7354,7463,7489,7786,7793,7814,7866,111,116,59,1,10989,4,2,99,114,7047,7094,107,4,4,99,101,112,115,7058,7064,7073,7080,111,110,103,59,1,8780,112,115,105,108,111,110,59,1,1014,114,105,109,101,59,1,8245,105,109,4,2,59,101,7088,7090,1,8765,113,59,1,8909,4,2,118,119,7100,7105,101,101,59,1,8893,101,100,4,2,59,103,7113,7115,1,8965,101,59,1,8965,114,107,4,2,59,116,7127,7129,1,9141,98,114,107,59,1,9142,4,2,111,121,7141,7146,110,103,59,1,8780,59,1,1073,113,117,111,59,1,8222,4,5,99,109,112,114,116,7167,7181,7188,7193,7199,97,117,115,4,2,59,101,7176,7178,1,8757,59,1,8757,112,116,121,118,59,1,10672,115,105,59,1,1014,110,111,117,59,1,8492,4,3,97,104,119,7207,7210,7213,59,1,946,59,1,8502,101,101,110,59,1,8812,114,59,3,55349,56607,103,4,7,99,111,115,116,117,118,119,7241,7262,7288,7305,7328,7335,7340,4,3,97,105,117,7249,7253,7258,112,59,1,8898,114,99,59,1,9711,112,59,1,8899,4,3,100,112,116,7270,7275,7281,111,116,59,1,10752,108,117,115,59,1,10753,105,109,101,115,59,1,10754,4,2,113,116,7294,7300,99,117,112,59,1,10758,97,114,59,1,9733,114,105,97,110,103,108,101,4,2,100,117,7318,7324,111,119,110,59,1,9661,112,59,1,9651,112,108,117,115,59,1,10756,101,101,59,1,8897,101,100,103,101,59,1,8896,97,114,111,119,59,1,10509,4,3,97,107,111,7362,7436,7458,4,2,99,110,7368,7432,107,4,3,108,115,116,7377,7386,7394,111,122,101,110,103,101,59,1,10731,113,117,97,114,101,59,1,9642,114,105,97,110,103,108,101,4,4,59,100,108,114,7411,7413,7419,7425,1,9652,111,119,110,59,1,9662,101,102,116,59,1,9666,105,103,104,116,59,1,9656,107,59,1,9251,4,2,49,51,7442,7454,4,2,50,52,7448,7451,59,1,9618,59,1,9617,52,59,1,9619,99,107,59,1,9608,4,2,101,111,7469,7485,4,2,59,113,7475,7478,3,61,8421,117,105,118,59,3,8801,8421,116,59,1,8976,4,4,112,116,119,120,7499,7504,7517,7523,102,59,3,55349,56659,4,2,59,116,7510,7512,1,8869,111,109,59,1,8869,116,105,101,59,1,8904,4,12,68,72,85,86,98,100,104,109,112,116,117,118,7549,7571,7597,7619,7655,7660,7682,7708,7715,7721,7728,7750,4,4,76,82,108,114,7559,7562,7565,7568,59,1,9559,59,1,9556,59,1,9558,59,1,9555,4,5,59,68,85,100,117,7583,7585,7588,7591,7594,1,9552,59,1,9574,59,1,9577,59,1,9572,59,1,9575,4,4,76,82,108,114,7607,7610,7613,7616,59,1,9565,59,1,9562,59,1,9564,59,1,9561,4,7,59,72,76,82,104,108,114,7635,7637,7640,7643,7646,7649,7652,1,9553,59,1,9580,59,1,9571,59,1,9568,59,1,9579,59,1,9570,59,1,9567,111,120,59,1,10697,4,4,76,82,108,114,7670,7673,7676,7679,59,1,9557,59,1,9554,59,1,9488,59,1,9484,4,5,59,68,85,100,117,7694,7696,7699,7702,7705,1,9472,59,1,9573,59,1,9576,59,1,9516,59,1,9524,105,110,117,115,59,1,8863,108,117,115,59,1,8862,105,109,101,115,59,1,8864,4,4,76,82,108,114,7738,7741,7744,7747,59,1,9563,59,1,9560,59,1,9496,59,1,9492,4,7,59,72,76,82,104,108,114,7766,7768,7771,7774,7777,7780,7783,1,9474,59,1,9578,59,1,9569,59,1,9566,59,1,9532,59,1,9508,59,1,9500,114,105,109,101,59,1,8245,4,2,101,118,7799,7804,118,101,59,1,728,98,97,114,5,166,1,59,7812,1,166,4,4,99,101,105,111,7824,7829,7834,7846,114,59,3,55349,56503,109,105,59,1,8271,109,4,2,59,101,7841,7843,1,8765,59,1,8909,108,4,3,59,98,104,7855,7857,7860,1,92,59,1,10693,115,117,98,59,1,10184,4,2,108,109,7872,7885,108,4,2,59,101,7879,7881,1,8226,116,59,1,8226,112,4,3,59,69,101,7894,7896,7899,1,8782,59,1,10926,4,2,59,113,7905,7907,1,8783,59,1,8783,4,15,97,99,100,101,102,104,105,108,111,114,115,116,117,119,121,7942,8021,8075,8080,8121,8126,8157,8279,8295,8430,8446,8485,8491,8707,8726,4,3,99,112,114,7950,7956,8007,117,116,101,59,1,263,4,6,59,97,98,99,100,115,7970,7972,7977,7984,7998,8003,1,8745,110,100,59,1,10820,114,99,117,112,59,1,10825,4,2,97,117,7990,7994,112,59,1,10827,112,59,1,10823,111,116,59,1,10816,59,3,8745,65024,4,2,101,111,8013,8017,116,59,1,8257,110,59,1,711,4,4,97,101,105,117,8031,8046,8056,8061,4,2,112,114,8037,8041,115,59,1,10829,111,110,59,1,269,100,105,108,5,231,1,59,8054,1,231,114,99,59,1,265,112,115,4,2,59,115,8069,8071,1,10828,109,59,1,10832,111,116,59,1,267,4,3,100,109,110,8088,8097,8104,105,108,5,184,1,59,8095,1,184,112,116,121,118,59,1,10674,116,5,162,2,59,101,8112,8114,1,162,114,100,111,116,59,1,183,114,59,3,55349,56608,4,3,99,101,105,8134,8138,8154,121,59,1,1095,99,107,4,2,59,109,8146,8148,1,10003,97,114,107,59,1,10003,59,1,967,114,4,7,59,69,99,101,102,109,115,8174,8176,8179,8258,8261,8268,8273,1,9675,59,1,10691,4,3,59,101,108,8187,8189,8193,1,710,113,59,1,8791,101,4,2,97,100,8200,8223,114,114,111,119,4,2,108,114,8210,8216,101,102,116,59,1,8634,105,103,104,116,59,1,8635,4,5,82,83,97,99,100,8235,8238,8241,8246,8252,59,1,174,59,1,9416,115,116,59,1,8859,105,114,99,59,1,8858,97,115,104,59,1,8861,59,1,8791,110,105,110,116,59,1,10768,105,100,59,1,10991,99,105,114,59,1,10690,117,98,115,4,2,59,117,8288,8290,1,9827,105,116,59,1,9827,4,4,108,109,110,112,8305,8326,8376,8400,111,110,4,2,59,101,8313,8315,1,58,4,2,59,113,8321,8323,1,8788,59,1,8788,4,2,109,112,8332,8344,97,4,2,59,116,8339,8341,1,44,59,1,64,4,3,59,102,108,8352,8354,8358,1,8705,110,59,1,8728,101,4,2,109,120,8365,8371,101,110,116,59,1,8705,101,115,59,1,8450,4,2,103,105,8382,8395,4,2,59,100,8388,8390,1,8773,111,116,59,1,10861,110,116,59,1,8750,4,3,102,114,121,8408,8412,8417,59,3,55349,56660,111,100,59,1,8720,5,169,2,59,115,8424,8426,1,169,114,59,1,8471,4,2,97,111,8436,8441,114,114,59,1,8629,115,115,59,1,10007,4,2,99,117,8452,8457,114,59,3,55349,56504,4,2,98,112,8463,8474,4,2,59,101,8469,8471,1,10959,59,1,10961,4,2,59,101,8480,8482,1,10960,59,1,10962,100,111,116,59,1,8943,4,7,100,101,108,112,114,118,119,8507,8522,8536,8550,8600,8697,8702,97,114,114,4,2,108,114,8516,8519,59,1,10552,59,1,10549,4,2,112,115,8528,8532,114,59,1,8926,99,59,1,8927,97,114,114,4,2,59,112,8545,8547,1,8630,59,1,10557,4,6,59,98,99,100,111,115,8564,8566,8573,8587,8592,8596,1,8746,114,99,97,112,59,1,10824,4,2,97,117,8579,8583,112,59,1,10822,112,59,1,10826,111,116,59,1,8845,114,59,1,10821,59,3,8746,65024,4,4,97,108,114,118,8610,8623,8663,8672,114,114,4,2,59,109,8618,8620,1,8631,59,1,10556,121,4,3,101,118,119,8632,8651,8656,113,4,2,112,115,8639,8645,114,101,99,59,1,8926,117,99,99,59,1,8927,101,101,59,1,8910,101,100,103,101,59,1,8911,101,110,5,164,1,59,8670,1,164,101,97,114,114,111,119,4,2,108,114,8684,8690,101,102,116,59,1,8630,105,103,104,116,59,1,8631,101,101,59,1,8910,101,100,59,1,8911,4,2,99,105,8713,8721,111,110,105,110,116,59,1,8754,110,116,59,1,8753,108,99,116,121,59,1,9005,4,19,65,72,97,98,99,100,101,102,104,105,106,108,111,114,115,116,117,119,122,8773,8778,8783,8821,8839,8854,8887,8914,8930,8944,9036,9041,9058,9197,9227,9258,9281,9297,9305,114,114,59,1,8659,97,114,59,1,10597,4,4,103,108,114,115,8793,8799,8805,8809,103,101,114,59,1,8224,101,116,104,59,1,8504,114,59,1,8595,104,4,2,59,118,8816,8818,1,8208,59,1,8867,4,2,107,108,8827,8834,97,114,111,119,59,1,10511,97,99,59,1,733,4,2,97,121,8845,8851,114,111,110,59,1,271,59,1,1076,4,3,59,97,111,8862,8864,8880,1,8518,4,2,103,114,8870,8876,103,101,114,59,1,8225,114,59,1,8650,116,115,101,113,59,1,10871,4,3,103,108,109,8895,8902,8907,5,176,1,59,8900,1,176,116,97,59,1,948,112,116,121,118,59,1,10673,4,2,105,114,8920,8926,115,104,116,59,1,10623,59,3,55349,56609,97,114,4,2,108,114,8938,8941,59,1,8643,59,1,8642,4,5,97,101,103,115,118,8956,8986,8989,8996,9001,109,4,3,59,111,115,8965,8967,8983,1,8900,110,100,4,2,59,115,8975,8977,1,8900,117,105,116,59,1,9830,59,1,9830,59,1,168,97,109,109,97,59,1,989,105,110,59,1,8946,4,3,59,105,111,9009,9011,9031,1,247,100,101,5,247,2,59,111,9020,9022,1,247,110,116,105,109,101,115,59,1,8903,110,120,59,1,8903,99,121,59,1,1106,99,4,2,111,114,9048,9053,114,110,59,1,8990,111,112,59,1,8973,4,5,108,112,116,117,119,9070,9076,9081,9130,9144,108,97,114,59,1,36,102,59,3,55349,56661,4,5,59,101,109,112,115,9093,9095,9109,9116,9122,1,729,113,4,2,59,100,9102,9104,1,8784,111,116,59,1,8785,105,110,117,115,59,1,8760,108,117,115,59,1,8724,113,117,97,114,101,59,1,8865,98,108,101,98,97,114,119,101,100,103,101,59,1,8966,110,4,3,97,100,104,9153,9160,9172,114,114,111,119,59,1,8595,111,119,110,97,114,114,111,119,115,59,1,8650,97,114,112,111,111,110,4,2,108,114,9184,9190,101,102,116,59,1,8643,105,103,104,116,59,1,8642,4,2,98,99,9203,9211,107,97,114,111,119,59,1,10512,4,2,111,114,9217,9222,114,110,59,1,8991,111,112,59,1,8972,4,3,99,111,116,9235,9248,9252,4,2,114,121,9241,9245,59,3,55349,56505,59,1,1109,108,59,1,10742,114,111,107,59,1,273,4,2,100,114,9264,9269,111,116,59,1,8945,105,4,2,59,102,9276,9278,1,9663,59,1,9662,4,2,97,104,9287,9292,114,114,59,1,8693,97,114,59,1,10607,97,110,103,108,101,59,1,10662,4,2,99,105,9311,9315,121,59,1,1119,103,114,97,114,114,59,1,10239,4,18,68,97,99,100,101,102,103,108,109,110,111,112,113,114,115,116,117,120,9361,9376,9398,9439,9444,9447,9462,9495,9531,9585,9598,9614,9659,9755,9771,9792,9808,9826,4,2,68,111,9367,9372,111,116,59,1,10871,116,59,1,8785,4,2,99,115,9382,9392,117,116,101,5,233,1,59,9390,1,233,116,101,114,59,1,10862,4,4,97,105,111,121,9408,9414,9430,9436,114,111,110,59,1,283,114,4,2,59,99,9421,9423,1,8790,5,234,1,59,9428,1,234,108,111,110,59,1,8789,59,1,1101,111,116,59,1,279,59,1,8519,4,2,68,114,9453,9458,111,116,59,1,8786,59,3,55349,56610,4,3,59,114,115,9470,9472,9482,1,10906,97,118,101,5,232,1,59,9480,1,232,4,2,59,100,9488,9490,1,10902,111,116,59,1,10904,4,4,59,105,108,115,9505,9507,9515,9518,1,10905,110,116,101,114,115,59,1,9191,59,1,8467,4,2,59,100,9524,9526,1,10901,111,116,59,1,10903,4,3,97,112,115,9539,9544,9564,99,114,59,1,275,116,121,4,3,59,115,118,9554,9556,9561,1,8709,101,116,59,1,8709,59,1,8709,112,4,2,49,59,9571,9583,4,2,51,52,9577,9580,59,1,8196,59,1,8197,1,8195,4,2,103,115,9591,9594,59,1,331,112,59,1,8194,4,2,103,112,9604,9609,111,110,59,1,281,102,59,3,55349,56662,4,3,97,108,115,9622,9635,9640,114,4,2,59,115,9629,9631,1,8917,108,59,1,10723,117,115,59,1,10865,105,4,3,59,108,118,9649,9651,9656,1,949,111,110,59,1,949,59,1,1013,4,4,99,115,117,118,9669,9686,9716,9747,4,2,105,111,9675,9680,114,99,59,1,8790,108,111,110,59,1,8789,4,2,105,108,9692,9696,109,59,1,8770,97,110,116,4,2,103,108,9705,9710,116,114,59,1,10902,101,115,115,59,1,10901,4,3,97,101,105,9724,9729,9734,108,115,59,1,61,115,116,59,1,8799,118,4,2,59,68,9741,9743,1,8801,68,59,1,10872,112,97,114,115,108,59,1,10725,4,2,68,97,9761,9766,111,116,59,1,8787,114,114,59,1,10609,4,3,99,100,105,9779,9783,9788,114,59,1,8495,111,116,59,1,8784,109,59,1,8770,4,2,97,104,9798,9801,59,1,951,5,240,1,59,9806,1,240,4,2,109,114,9814,9822,108,5,235,1,59,9820,1,235,111,59,1,8364,4,3,99,105,112,9834,9838,9843,108,59,1,33,115,116,59,1,8707,4,2,101,111,9849,9859,99,116,97,116,105,111,110,59,1,8496,110,101,110,116,105,97,108,101,59,1,8519,4,12,97,99,101,102,105,106,108,110,111,112,114,115,9896,9910,9914,9921,9954,9960,9967,9989,9994,10027,10036,10164,108,108,105,110,103,100,111,116,115,101,113,59,1,8786,121,59,1,1092,109,97,108,101,59,1,9792,4,3,105,108,114,9929,9935,9950,108,105,103,59,1,64259,4,2,105,108,9941,9945,103,59,1,64256,105,103,59,1,64260,59,3,55349,56611,108,105,103,59,1,64257,108,105,103,59,3,102,106,4,3,97,108,116,9975,9979,9984,116,59,1,9837,105,103,59,1,64258,110,115,59,1,9649,111,102,59,1,402,4,2,112,114,10000,10005,102,59,3,55349,56663,4,2,97,107,10011,10016,108,108,59,1,8704,4,2,59,118,10022,10024,1,8916,59,1,10969,97,114,116,105,110,116,59,1,10765,4,2,97,111,10042,10159,4,2,99,115,10048,10155,4,6,49,50,51,52,53,55,10062,10102,10114,10135,10139,10151,4,6,50,51,52,53,54,56,10076,10083,10086,10093,10096,10099,5,189,1,59,10081,1,189,59,1,8531,5,188,1,59,10091,1,188,59,1,8533,59,1,8537,59,1,8539,4,2,51,53,10108,10111,59,1,8532,59,1,8534,4,3,52,53,56,10122,10129,10132,5,190,1,59,10127,1,190,59,1,8535,59,1,8540,53,59,1,8536,4,2,54,56,10145,10148,59,1,8538,59,1,8541,56,59,1,8542,108,59,1,8260,119,110,59,1,8994,99,114,59,3,55349,56507,4,17,69,97,98,99,100,101,102,103,105,106,108,110,111,114,115,116,118,10206,10217,10247,10254,10268,10273,10358,10363,10374,10380,10385,10406,10458,10464,10470,10497,10610,4,2,59,108,10212,10214,1,8807,59,1,10892,4,3,99,109,112,10225,10231,10244,117,116,101,59,1,501,109,97,4,2,59,100,10239,10241,1,947,59,1,989,59,1,10886,114,101,118,101,59,1,287,4,2,105,121,10260,10265,114,99,59,1,285,59,1,1075,111,116,59,1,289,4,4,59,108,113,115,10283,10285,10288,10308,1,8805,59,1,8923,4,3,59,113,115,10296,10298,10301,1,8805,59,1,8807,108,97,110,116,59,1,10878,4,4,59,99,100,108,10318,10320,10324,10345,1,10878,99,59,1,10921,111,116,4,2,59,111,10332,10334,1,10880,4,2,59,108,10340,10342,1,10882,59,1,10884,4,2,59,101,10351,10354,3,8923,65024,115,59,1,10900,114,59,3,55349,56612,4,2,59,103,10369,10371,1,8811,59,1,8921,109,101,108,59,1,8503,99,121,59,1,1107,4,4,59,69,97,106,10395,10397,10400,10403,1,8823,59,1,10898,59,1,10917,59,1,10916,4,4,69,97,101,115,10416,10419,10434,10453,59,1,8809,112,4,2,59,112,10426,10428,1,10890,114,111,120,59,1,10890,4,2,59,113,10440,10442,1,10888,4,2,59,113,10448,10450,1,10888,59,1,8809,105,109,59,1,8935,112,102,59,3,55349,56664,97,118,101,59,1,96,4,2,99,105,10476,10480,114,59,1,8458,109,4,3,59,101,108,10489,10491,10494,1,8819,59,1,10894,59,1,10896,5,62,6,59,99,100,108,113,114,10512,10514,10527,10532,10538,10545,1,62,4,2,99,105,10520,10523,59,1,10919,114,59,1,10874,111,116,59,1,8919,80,97,114,59,1,10645,117,101,115,116,59,1,10876,4,5,97,100,101,108,115,10557,10574,10579,10599,10605,4,2,112,114,10563,10570,112,114,111,120,59,1,10886,114,59,1,10616,111,116,59,1,8919,113,4,2,108,113,10586,10592,101,115,115,59,1,8923,108,101,115,115,59,1,10892,101,115,115,59,1,8823,105,109,59,1,8819,4,2,101,110,10616,10626,114,116,110,101,113,113,59,3,8809,65024,69,59,3,8809,65024,4,10,65,97,98,99,101,102,107,111,115,121,10653,10658,10713,10718,10724,10760,10765,10786,10850,10875,114,114,59,1,8660,4,4,105,108,109,114,10668,10674,10678,10684,114,115,112,59,1,8202,102,59,1,189,105,108,116,59,1,8459,4,2,100,114,10690,10695,99,121,59,1,1098,4,3,59,99,119,10703,10705,10710,1,8596,105,114,59,1,10568,59,1,8621,97,114,59,1,8463,105,114,99,59,1,293,4,3,97,108,114,10732,10748,10754,114,116,115,4,2,59,117,10741,10743,1,9829,105,116,59,1,9829,108,105,112,59,1,8230,99,111,110,59,1,8889,114,59,3,55349,56613,115,4,2,101,119,10772,10779,97,114,111,119,59,1,10533,97,114,111,119,59,1,10534,4,5,97,109,111,112,114,10798,10803,10809,10839,10844,114,114,59,1,8703,116,104,116,59,1,8763,107,4,2,108,114,10816,10827,101,102,116,97,114,114,111,119,59,1,8617,105,103,104,116,97,114,114,111,119,59,1,8618,102,59,3,55349,56665,98,97,114,59,1,8213,4,3,99,108,116,10858,10863,10869,114,59,3,55349,56509,97,115,104,59,1,8463,114,111,107,59,1,295,4,2,98,112,10881,10887,117,108,108,59,1,8259,104,101,110,59,1,8208,4,15,97,99,101,102,103,105,106,109,110,111,112,113,115,116,117,10925,10936,10958,10977,10990,11001,11039,11045,11101,11192,11220,11226,11237,11285,11299,99,117,116,101,5,237,1,59,10934,1,237,4,3,59,105,121,10944,10946,10955,1,8291,114,99,5,238,1,59,10953,1,238,59,1,1080,4,2,99,120,10964,10968,121,59,1,1077,99,108,5,161,1,59,10975,1,161,4,2,102,114,10983,10986,59,1,8660,59,3,55349,56614,114,97,118,101,5,236,1,59,10999,1,236,4,4,59,105,110,111,11011,11013,11028,11034,1,8520,4,2,105,110,11019,11024,110,116,59,1,10764,116,59,1,8749,102,105,110,59,1,10716,116,97,59,1,8489,108,105,103,59,1,307,4,3,97,111,112,11053,11092,11096,4,3,99,103,116,11061,11065,11088,114,59,1,299,4,3,101,108,112,11073,11076,11082,59,1,8465,105,110,101,59,1,8464,97,114,116,59,1,8465,104,59,1,305,102,59,1,8887,101,100,59,1,437,4,5,59,99,102,111,116,11113,11115,11121,11136,11142,1,8712,97,114,101,59,1,8453,105,110,4,2,59,116,11129,11131,1,8734,105,101,59,1,10717,100,111,116,59,1,305,4,5,59,99,101,108,112,11154,11156,11161,11179,11186,1,8747,97,108,59,1,8890,4,2,103,114,11167,11173,101,114,115,59,1,8484,99,97,108,59,1,8890,97,114,104,107,59,1,10775,114,111,100,59,1,10812,4,4,99,103,112,116,11202,11206,11211,11216,121,59,1,1105,111,110,59,1,303,102,59,3,55349,56666,97,59,1,953,114,111,100,59,1,10812,117,101,115,116,5,191,1,59,11235,1,191,4,2,99,105,11243,11248,114,59,3,55349,56510,110,4,5,59,69,100,115,118,11261,11263,11266,11271,11282,1,8712,59,1,8953,111,116,59,1,8949,4,2,59,118,11277,11279,1,8948,59,1,8947,59,1,8712,4,2,59,105,11291,11293,1,8290,108,100,101,59,1,297,4,2,107,109,11305,11310,99,121,59,1,1110,108,5,239,1,59,11316,1,239,4,6,99,102,109,111,115,117,11332,11346,11351,11357,11363,11380,4,2,105,121,11338,11343,114,99,59,1,309,59,1,1081,114,59,3,55349,56615,97,116,104,59,1,567,112,102,59,3,55349,56667,4,2,99,101,11369,11374,114,59,3,55349,56511,114,99,121,59,1,1112,107,99,121,59,1,1108,4,8,97,99,102,103,104,106,111,115,11404,11418,11433,11438,11445,11450,11455,11461,112,112,97,4,2,59,118,11413,11415,1,954,59,1,1008,4,2,101,121,11424,11430,100,105,108,59,1,311,59,1,1082,114,59,3,55349,56616,114,101,101,110,59,1,312,99,121,59,1,1093,99,121,59,1,1116,112,102,59,3,55349,56668,99,114,59,3,55349,56512,4,23,65,66,69,72,97,98,99,100,101,102,103,104,106,108,109,110,111,112,114,115,116,117,118,11515,11538,11544,11555,11560,11721,11780,11818,11868,12136,12160,12171,12203,12208,12246,12275,12327,12509,12523,12569,12641,12732,12752,4,3,97,114,116,11523,11528,11532,114,114,59,1,8666,114,59,1,8656,97,105,108,59,1,10523,97,114,114,59,1,10510,4,2,59,103,11550,11552,1,8806,59,1,10891,97,114,59,1,10594,4,9,99,101,103,109,110,112,113,114,116,11580,11586,11594,11600,11606,11624,11627,11636,11694,117,116,101,59,1,314,109,112,116,121,118,59,1,10676,114,97,110,59,1,8466,98,100,97,59,1,955,103,4,3,59,100,108,11615,11617,11620,1,10216,59,1,10641,101,59,1,10216,59,1,10885,117,111,5,171,1,59,11634,1,171,114,4,8,59,98,102,104,108,112,115,116,11655,11657,11669,11673,11677,11681,11685,11690,1,8592,4,2,59,102,11663,11665,1,8676,115,59,1,10527,115,59,1,10525,107,59,1,8617,112,59,1,8619,108,59,1,10553,105,109,59,1,10611,108,59,1,8610,4,3,59,97,101,11702,11704,11709,1,10923,105,108,59,1,10521,4,2,59,115,11715,11717,1,10925,59,3,10925,65024,4,3,97,98,114,11729,11734,11739,114,114,59,1,10508,114,107,59,1,10098,4,2,97,107,11745,11758,99,4,2,101,107,11752,11755,59,1,123,59,1,91,4,2,101,115,11764,11767,59,1,10635,108,4,2,100,117,11774,11777,59,1,10639,59,1,10637,4,4,97,101,117,121,11790,11796,11811,11815,114,111,110,59,1,318,4,2,100,105,11802,11807,105,108,59,1,316,108,59,1,8968,98,59,1,123,59,1,1083,4,4,99,113,114,115,11828,11832,11845,11864,97,59,1,10550,117,111,4,2,59,114,11840,11842,1,8220,59,1,8222,4,2,100,117,11851,11857,104,97,114,59,1,10599,115,104,97,114,59,1,10571,104,59,1,8626,4,5,59,102,103,113,115,11880,11882,12008,12011,12031,1,8804,116,4,5,97,104,108,114,116,11895,11913,11935,11947,11996,114,114,111,119,4,2,59,116,11905,11907,1,8592,97,105,108,59,1,8610,97,114,112,111,111,110,4,2,100,117,11925,11931,111,119,110,59,1,8637,112,59,1,8636,101,102,116,97,114,114,111,119,115,59,1,8647,105,103,104,116,4,3,97,104,115,11959,11974,11984,114,114,111,119,4,2,59,115,11969,11971,1,8596,59,1,8646,97,114,112,111,111,110,115,59,1,8651,113,117,105,103,97,114,114,111,119,59,1,8621,104,114,101,101,116,105,109,101,115,59,1,8907,59,1,8922,4,3,59,113,115,12019,12021,12024,1,8804,59,1,8806,108,97,110,116,59,1,10877,4,5,59,99,100,103,115,12043,12045,12049,12070,12083,1,10877,99,59,1,10920,111,116,4,2,59,111,12057,12059,1,10879,4,2,59,114,12065,12067,1,10881,59,1,10883,4,2,59,101,12076,12079,3,8922,65024,115,59,1,10899,4,5,97,100,101,103,115,12095,12103,12108,12126,12131,112,112,114,111,120,59,1,10885,111,116,59,1,8918,113,4,2,103,113,12115,12120,116,114,59,1,8922,103,116,114,59,1,10891,116,114,59,1,8822,105,109,59,1,8818,4,3,105,108,114,12144,12150,12156,115,104,116,59,1,10620,111,111,114,59,1,8970,59,3,55349,56617,4,2,59,69,12166,12168,1,8822,59,1,10897,4,2,97,98,12177,12198,114,4,2,100,117,12184,12187,59,1,8637,4,2,59,108,12193,12195,1,8636,59,1,10602,108,107,59,1,9604,99,121,59,1,1113,4,5,59,97,99,104,116,12220,12222,12227,12235,12241,1,8810,114,114,59,1,8647,111,114,110,101,114,59,1,8990,97,114,100,59,1,10603,114,105,59,1,9722,4,2,105,111,12252,12258,100,111,116,59,1,320,117,115,116,4,2,59,97,12267,12269,1,9136,99,104,101,59,1,9136,4,4,69,97,101,115,12285,12288,12303,12322,59,1,8808,112,4,2,59,112,12295,12297,1,10889,114,111,120,59,1,10889,4,2,59,113,12309,12311,1,10887,4,2,59,113,12317,12319,1,10887,59,1,8808,105,109,59,1,8934,4,8,97,98,110,111,112,116,119,122,12345,12359,12364,12421,12446,12467,12474,12490,4,2,110,114,12351,12355,103,59,1,10220,114,59,1,8701,114,107,59,1,10214,103,4,3,108,109,114,12373,12401,12409,101,102,116,4,2,97,114,12382,12389,114,114,111,119,59,1,10229,105,103,104,116,97,114,114,111,119,59,1,10231,97,112,115,116,111,59,1,10236,105,103,104,116,97,114,114,111,119,59,1,10230,112,97,114,114,111,119,4,2,108,114,12433,12439,101,102,116,59,1,8619,105,103,104,116,59,1,8620,4,3,97,102,108,12454,12458,12462,114,59,1,10629,59,3,55349,56669,117,115,59,1,10797,105,109,101,115,59,1,10804,4,2,97,98,12480,12485,115,116,59,1,8727,97,114,59,1,95,4,3,59,101,102,12498,12500,12506,1,9674,110,103,101,59,1,9674,59,1,10731,97,114,4,2,59,108,12517,12519,1,40,116,59,1,10643,4,5,97,99,104,109,116,12535,12540,12548,12561,12564,114,114,59,1,8646,111,114,110,101,114,59,1,8991,97,114,4,2,59,100,12556,12558,1,8651,59,1,10605,59,1,8206,114,105,59,1,8895,4,6,97,99,104,105,113,116,12583,12589,12594,12597,12614,12635,113,117,111,59,1,8249,114,59,3,55349,56513,59,1,8624,109,4,3,59,101,103,12606,12608,12611,1,8818,59,1,10893,59,1,10895,4,2,98,117,12620,12623,59,1,91,111,4,2,59,114,12630,12632,1,8216,59,1,8218,114,111,107,59,1,322,5,60,8,59,99,100,104,105,108,113,114,12660,12662,12675,12680,12686,12692,12698,12705,1,60,4,2,99,105,12668,12671,59,1,10918,114,59,1,10873,111,116,59,1,8918,114,101,101,59,1,8907,109,101,115,59,1,8905,97,114,114,59,1,10614,117,101,115,116,59,1,10875,4,2,80,105,12711,12716,97,114,59,1,10646,4,3,59,101,102,12724,12726,12729,1,9667,59,1,8884,59,1,9666,114,4,2,100,117,12739,12746,115,104,97,114,59,1,10570,104,97,114,59,1,10598,4,2,101,110,12758,12768,114,116,110,101,113,113,59,3,8808,65024,69,59,3,8808,65024,4,14,68,97,99,100,101,102,104,105,108,110,111,112,115,117,12803,12809,12893,12908,12914,12928,12933,12937,13011,13025,13032,13049,13052,13069,68,111,116,59,1,8762,4,4,99,108,112,114,12819,12827,12849,12887,114,5,175,1,59,12825,1,175,4,2,101,116,12833,12836,59,1,9794,4,2,59,101,12842,12844,1,10016,115,101,59,1,10016,4,2,59,115,12855,12857,1,8614,116,111,4,4,59,100,108,117,12869,12871,12877,12883,1,8614,111,119,110,59,1,8615,101,102,116,59,1,8612,112,59,1,8613,107,101,114,59,1,9646,4,2,111,121,12899,12905,109,109,97,59,1,10793,59,1,1084,97,115,104,59,1,8212,97,115,117,114,101,100,97,110,103,108,101,59,1,8737,114,59,3,55349,56618,111,59,1,8487,4,3,99,100,110,12945,12954,12985,114,111,5,181,1,59,12952,1,181,4,4,59,97,99,100,12964,12966,12971,12976,1,8739,115,116,59,1,42,105,114,59,1,10992,111,116,5,183,1,59,12983,1,183,117,115,4,3,59,98,100,12995,12997,13000,1,8722,59,1,8863,4,2,59,117,13006,13008,1,8760,59,1,10794,4,2,99,100,13017,13021,112,59,1,10971,114,59,1,8230,112,108,117,115,59,1,8723,4,2,100,112,13038,13044,101,108,115,59,1,8871,102,59,3,55349,56670,59,1,8723,4,2,99,116,13058,13063,114,59,3,55349,56514,112,111,115,59,1,8766,4,3,59,108,109,13077,13079,13087,1,956,116,105,109,97,112,59,1,8888,97,112,59,1,8888,4,24,71,76,82,86,97,98,99,100,101,102,103,104,105,106,108,109,111,112,114,115,116,117,118,119,13142,13165,13217,13229,13247,13330,13359,13414,13420,13508,13513,13579,13602,13626,13631,13762,13767,13855,13936,13995,14214,14285,14312,14432,4,2,103,116,13148,13152,59,3,8921,824,4,2,59,118,13158,13161,3,8811,8402,59,3,8811,824,4,3,101,108,116,13173,13200,13204,102,116,4,2,97,114,13181,13188,114,114,111,119,59,1,8653,105,103,104,116,97,114,114,111,119,59,1,8654,59,3,8920,824,4,2,59,118,13210,13213,3,8810,8402,59,3,8810,824,105,103,104,116,97,114,114,111,119,59,1,8655,4,2,68,100,13235,13241,97,115,104,59,1,8879,97,115,104,59,1,8878,4,5,98,99,110,112,116,13259,13264,13270,13275,13308,108,97,59,1,8711,117,116,101,59,1,324,103,59,3,8736,8402,4,5,59,69,105,111,112,13287,13289,13293,13298,13302,1,8777,59,3,10864,824,100,59,3,8779,824,115,59,1,329,114,111,120,59,1,8777,117,114,4,2,59,97,13316,13318,1,9838,108,4,2,59,115,13325,13327,1,9838,59,1,8469,4,2,115,117,13336,13344,112,5,160,1,59,13342,1,160,109,112,4,2,59,101,13352,13355,3,8782,824,59,3,8783,824,4,5,97,101,111,117,121,13371,13385,13391,13407,13411,4,2,112,114,13377,13380,59,1,10819,111,110,59,1,328,100,105,108,59,1,326,110,103,4,2,59,100,13399,13401,1,8775,111,116,59,3,10861,824,112,59,1,10818,59,1,1085,97,115,104,59,1,8211,4,7,59,65,97,100,113,115,120,13436,13438,13443,13466,13472,13478,13494,1,8800,114,114,59,1,8663,114,4,2,104,114,13450,13454,107,59,1,10532,4,2,59,111,13460,13462,1,8599,119,59,1,8599,111,116,59,3,8784,824,117,105,118,59,1,8802,4,2,101,105,13484,13489,97,114,59,1,10536,109,59,3,8770,824,105,115,116,4,2,59,115,13503,13505,1,8708,59,1,8708,114,59,3,55349,56619,4,4,69,101,115,116,13523,13527,13563,13568,59,3,8807,824,4,3,59,113,115,13535,13537,13559,1,8817,4,3,59,113,115,13545,13547,13551,1,8817,59,3,8807,824,108,97,110,116,59,3,10878,824,59,3,10878,824,105,109,59,1,8821,4,2,59,114,13574,13576,1,8815,59,1,8815,4,3,65,97,112,13587,13592,13597,114,114,59,1,8654,114,114,59,1,8622,97,114,59,1,10994,4,3,59,115,118,13610,13612,13623,1,8715,4,2,59,100,13618,13620,1,8956,59,1,8954,59,1,8715,99,121,59,1,1114,4,7,65,69,97,100,101,115,116,13647,13652,13656,13661,13665,13737,13742,114,114,59,1,8653,59,3,8806,824,114,114,59,1,8602,114,59,1,8229,4,4,59,102,113,115,13675,13677,13703,13725,1,8816,116,4,2,97,114,13684,13691,114,114,111,119,59,1,8602,105,103,104,116,97,114,114,111,119,59,1,8622,4,3,59,113,115,13711,13713,13717,1,8816,59,3,8806,824,108,97,110,116,59,3,10877,824,4,2,59,115,13731,13734,3,10877,824,59,1,8814,105,109,59,1,8820,4,2,59,114,13748,13750,1,8814,105,4,2,59,101,13757,13759,1,8938,59,1,8940,105,100,59,1,8740,4,2,112,116,13773,13778,102,59,3,55349,56671,5,172,3,59,105,110,13787,13789,13829,1,172,110,4,4,59,69,100,118,13800,13802,13806,13812,1,8713,59,3,8953,824,111,116,59,3,8949,824,4,3,97,98,99,13820,13823,13826,59,1,8713,59,1,8951,59,1,8950,105,4,2,59,118,13836,13838,1,8716,4,3,97,98,99,13846,13849,13852,59,1,8716,59,1,8958,59,1,8957,4,3,97,111,114,13863,13892,13899,114,4,4,59,97,115,116,13874,13876,13883,13888,1,8742,108,108,101,108,59,1,8742,108,59,3,11005,8421,59,3,8706,824,108,105,110,116,59,1,10772,4,3,59,99,101,13907,13909,13914,1,8832,117,101,59,1,8928,4,2,59,99,13920,13923,3,10927,824,4,2,59,101,13929,13931,1,8832,113,59,3,10927,824,4,4,65,97,105,116,13946,13951,13971,13982,114,114,59,1,8655,114,114,4,3,59,99,119,13961,13963,13967,1,8603,59,3,10547,824,59,3,8605,824,103,104,116,97,114,114,111,119,59,1,8603,114,105,4,2,59,101,13990,13992,1,8939,59,1,8941,4,7,99,104,105,109,112,113,117,14011,14036,14060,14080,14085,14090,14106,4,4,59,99,101,114,14021,14023,14028,14032,1,8833,117,101,59,1,8929,59,3,10928,824,59,3,55349,56515,111,114,116,4,2,109,112,14045,14050,105,100,59,1,8740,97,114,97,108,108,101,108,59,1,8742,109,4,2,59,101,14067,14069,1,8769,4,2,59,113,14075,14077,1,8772,59,1,8772,105,100,59,1,8740,97,114,59,1,8742,115,117,4,2,98,112,14098,14102,101,59,1,8930,101,59,1,8931,4,3,98,99,112,14114,14157,14171,4,4,59,69,101,115,14124,14126,14130,14133,1,8836,59,3,10949,824,59,1,8840,101,116,4,2,59,101,14141,14144,3,8834,8402,113,4,2,59,113,14151,14153,1,8840,59,3,10949,824,99,4,2,59,101,14164,14166,1,8833,113,59,3,10928,824,4,4,59,69,101,115,14181,14183,14187,14190,1,8837,59,3,10950,824,59,1,8841,101,116,4,2,59,101,14198,14201,3,8835,8402,113,4,2,59,113,14208,14210,1,8841,59,3,10950,824,4,4,103,105,108,114,14224,14228,14238,14242,108,59,1,8825,108,100,101,5,241,1,59,14236,1,241,103,59,1,8824,105,97,110,103,108,101,4,2,108,114,14254,14269,101,102,116,4,2,59,101,14263,14265,1,8938,113,59,1,8940,105,103,104,116,4,2,59,101,14279,14281,1,8939,113,59,1,8941,4,2,59,109,14291,14293,1,957,4,3,59,101,115,14301,14303,14308,1,35,114,111,59,1,8470,112,59,1,8199,4,9,68,72,97,100,103,105,108,114,115,14332,14338,14344,14349,14355,14369,14376,14408,14426,97,115,104,59,1,8877,97,114,114,59,1,10500,112,59,3,8781,8402,97,115,104,59,1,8876,4,2,101,116,14361,14365,59,3,8805,8402,59,3,62,8402,110,102,105,110,59,1,10718,4,3,65,101,116,14384,14389,14393,114,114,59,1,10498,59,3,8804,8402,4,2,59,114,14399,14402,3,60,8402,105,101,59,3,8884,8402,4,2,65,116,14414,14419,114,114,59,1,10499,114,105,101,59,3,8885,8402,105,109,59,3,8764,8402,4,3,65,97,110,14440,14445,14468,114,114,59,1,8662,114,4,2,104,114,14452,14456,107,59,1,10531,4,2,59,111,14462,14464,1,8598,119,59,1,8598,101,97,114,59,1,10535,4,18,83,97,99,100,101,102,103,104,105,108,109,111,112,114,115,116,117,118,14512,14515,14535,14560,14597,14603,14618,14643,14657,14662,14701,14741,14747,14769,14851,14877,14907,14916,59,1,9416,4,2,99,115,14521,14531,117,116,101,5,243,1,59,14529,1,243,116,59,1,8859,4,2,105,121,14541,14557,114,4,2,59,99,14548,14550,1,8858,5,244,1,59,14555,1,244,59,1,1086,4,5,97,98,105,111,115,14572,14577,14583,14587,14591,115,104,59,1,8861,108,97,99,59,1,337,118,59,1,10808,116,59,1,8857,111,108,100,59,1,10684,108,105,103,59,1,339,4,2,99,114,14609,14614,105,114,59,1,10687,59,3,55349,56620,4,3,111,114,116,14626,14630,14640,110,59,1,731,97,118,101,5,242,1,59,14638,1,242,59,1,10689,4,2,98,109,14649,14654,97,114,59,1,10677,59,1,937,110,116,59,1,8750,4,4,97,99,105,116,14672,14677,14693,14698,114,114,59,1,8634,4,2,105,114,14683,14687,114,59,1,10686,111,115,115,59,1,10683,110,101,59,1,8254,59,1,10688,4,3,97,101,105,14709,14714,14719,99,114,59,1,333,103,97,59,1,969,4,3,99,100,110,14727,14733,14736,114,111,110,59,1,959,59,1,10678,117,115,59,1,8854,112,102,59,3,55349,56672,4,3,97,101,108,14755,14759,14764,114,59,1,10679,114,112,59,1,10681,117,115,59,1,8853,4,7,59,97,100,105,111,115,118,14785,14787,14792,14831,14837,14841,14848,1,8744,114,114,59,1,8635,4,4,59,101,102,109,14802,14804,14817,14824,1,10845,114,4,2,59,111,14811,14813,1,8500,102,59,1,8500,5,170,1,59,14822,1,170,5,186,1,59,14829,1,186,103,111,102,59,1,8886,114,59,1,10838,108,111,112,101,59,1,10839,59,1,10843,4,3,99,108,111,14859,14863,14873,114,59,1,8500,97,115,104,5,248,1,59,14871,1,248,108,59,1,8856,105,4,2,108,109,14884,14893,100,101,5,245,1,59,14891,1,245,101,115,4,2,59,97,14901,14903,1,8855,115,59,1,10806,109,108,5,246,1,59,14914,1,246,98,97,114,59,1,9021,4,12,97,99,101,102,104,105,108,109,111,114,115,117,14948,14992,14996,15033,15038,15068,15090,15189,15192,15222,15427,15441,114,4,4,59,97,115,116,14959,14961,14976,14989,1,8741,5,182,2,59,108,14968,14970,1,182,108,101,108,59,1,8741,4,2,105,108,14982,14986,109,59,1,10995,59,1,11005,59,1,8706,121,59,1,1087,114,4,5,99,105,109,112,116,15009,15014,15019,15024,15027,110,116,59,1,37,111,100,59,1,46,105,108,59,1,8240,59,1,8869,101,110,107,59,1,8241,114,59,3,55349,56621,4,3,105,109,111,15046,15057,15063,4,2,59,118,15052,15054,1,966,59,1,981,109,97,116,59,1,8499,110,101,59,1,9742,4,3,59,116,118,15076,15078,15087,1,960,99,104,102,111,114,107,59,1,8916,59,1,982,4,2,97,117,15096,15119,110,4,2,99,107,15103,15115,107,4,2,59,104,15110,15112,1,8463,59,1,8462,118,59,1,8463,115,4,9,59,97,98,99,100,101,109,115,116,15140,15142,15148,15151,15156,15168,15171,15179,15184,1,43,99,105,114,59,1,10787,59,1,8862,105,114,59,1,10786,4,2,111,117,15162,15165,59,1,8724,59,1,10789,59,1,10866,110,5,177,1,59,15177,1,177,105,109,59,1,10790,119,111,59,1,10791,59,1,177,4,3,105,112,117,15200,15208,15213,110,116,105,110,116,59,1,10773,102,59,3,55349,56673,110,100,5,163,1,59,15220,1,163,4,10,59,69,97,99,101,105,110,111,115,117,15244,15246,15249,15253,15258,15334,15347,15367,15416,15421,1,8826,59,1,10931,112,59,1,10935,117,101,59,1,8828,4,2,59,99,15264,15266,1,10927,4,6,59,97,99,101,110,115,15280,15282,15290,15299,15303,15329,1,8826,112,112,114,111,120,59,1,10935,117,114,108,121,101,113,59,1,8828,113,59,1,10927,4,3,97,101,115,15311,15319,15324,112,112,114,111,120,59,1,10937,113,113,59,1,10933,105,109,59,1,8936,105,109,59,1,8830,109,101,4,2,59,115,15342,15344,1,8242,59,1,8473,4,3,69,97,115,15355,15358,15362,59,1,10933,112,59,1,10937,105,109,59,1,8936,4,3,100,102,112,15375,15378,15404,59,1,8719,4,3,97,108,115,15386,15392,15398,108,97,114,59,1,9006,105,110,101,59,1,8978,117,114,102,59,1,8979,4,2,59,116,15410,15412,1,8733,111,59,1,8733,105,109,59,1,8830,114,101,108,59,1,8880,4,2,99,105,15433,15438,114,59,3,55349,56517,59,1,968,110,99,115,112,59,1,8200,4,6,102,105,111,112,115,117,15462,15467,15472,15478,15485,15491,114,59,3,55349,56622,110,116,59,1,10764,112,102,59,3,55349,56674,114,105,109,101,59,1,8279,99,114,59,3,55349,56518,4,3,97,101,111,15499,15520,15534,116,4,2,101,105,15506,15515,114,110,105,111,110,115,59,1,8461,110,116,59,1,10774,115,116,4,2,59,101,15528,15530,1,63,113,59,1,8799,116,5,34,1,59,15540,1,34,4,21,65,66,72,97,98,99,100,101,102,104,105,108,109,110,111,112,114,115,116,117,120,15586,15609,15615,15620,15796,15855,15893,15931,15977,16001,16039,16183,16204,16222,16228,16285,16312,16318,16363,16408,16416,4,3,97,114,116,15594,15599,15603,114,114,59,1,8667,114,59,1,8658,97,105,108,59,1,10524,97,114,114,59,1,10511,97,114,59,1,10596,4,7,99,100,101,110,113,114,116,15636,15651,15656,15664,15687,15696,15770,4,2,101,117,15642,15646,59,3,8765,817,116,101,59,1,341,105,99,59,1,8730,109,112,116,121,118,59,1,10675,103,4,4,59,100,101,108,15675,15677,15680,15683,1,10217,59,1,10642,59,1,10661,101,59,1,10217,117,111,5,187,1,59,15694,1,187,114,4,11,59,97,98,99,102,104,108,112,115,116,119,15721,15723,15727,15739,15742,15746,15750,15754,15758,15763,15767,1,8594,112,59,1,10613,4,2,59,102,15733,15735,1,8677,115,59,1,10528,59,1,10547,115,59,1,10526,107,59,1,8618,112,59,1,8620,108,59,1,10565,105,109,59,1,10612,108,59,1,8611,59,1,8605,4,2,97,105,15776,15781,105,108,59,1,10522,111,4,2,59,110,15788,15790,1,8758,97,108,115,59,1,8474,4,3,97,98,114,15804,15809,15814,114,114,59,1,10509,114,107,59,1,10099,4,2,97,107,15820,15833,99,4,2,101,107,15827,15830,59,1,125,59,1,93,4,2,101,115,15839,15842,59,1,10636,108,4,2,100,117,15849,15852,59,1,10638,59,1,10640,4,4,97,101,117,121,15865,15871,15886,15890,114,111,110,59,1,345,4,2,100,105,15877,15882,105,108,59,1,343,108,59,1,8969,98,59,1,125,59,1,1088,4,4,99,108,113,115,15903,15907,15914,15927,97,59,1,10551,100,104,97,114,59,1,10601,117,111,4,2,59,114,15922,15924,1,8221,59,1,8221,104,59,1,8627,4,3,97,99,103,15939,15966,15970,108,4,4,59,105,112,115,15950,15952,15957,15963,1,8476,110,101,59,1,8475,97,114,116,59,1,8476,59,1,8477,116,59,1,9645,5,174,1,59,15975,1,174,4,3,105,108,114,15985,15991,15997,115,104,116,59,1,10621,111,111,114,59,1,8971,59,3,55349,56623,4,2,97,111,16007,16028,114,4,2,100,117,16014,16017,59,1,8641,4,2,59,108,16023,16025,1,8640,59,1,10604,4,2,59,118,16034,16036,1,961,59,1,1009,4,3,103,110,115,16047,16167,16171,104,116,4,6,97,104,108,114,115,116,16063,16081,16103,16130,16143,16155,114,114,111,119,4,2,59,116,16073,16075,1,8594,97,105,108,59,1,8611,97,114,112,111,111,110,4,2,100,117,16093,16099,111,119,110,59,1,8641,112,59,1,8640,101,102,116,4,2,97,104,16112,16120,114,114,111,119,115,59,1,8644,97,114,112,111,111,110,115,59,1,8652,105,103,104,116,97,114,114,111,119,115,59,1,8649,113,117,105,103,97,114,114,111,119,59,1,8605,104,114,101,101,116,105,109,101,115,59,1,8908,103,59,1,730,105,110,103,100,111,116,115,101,113,59,1,8787,4,3,97,104,109,16191,16196,16201,114,114,59,1,8644,97,114,59,1,8652,59,1,8207,111,117,115,116,4,2,59,97,16214,16216,1,9137,99,104,101,59,1,9137,109,105,100,59,1,10990,4,4,97,98,112,116,16238,16252,16257,16278,4,2,110,114,16244,16248,103,59,1,10221,114,59,1,8702,114,107,59,1,10215,4,3,97,102,108,16265,16269,16273,114,59,1,10630,59,3,55349,56675,117,115,59,1,10798,105,109,101,115,59,1,10805,4,2,97,112,16291,16304,114,4,2,59,103,16298,16300,1,41,116,59,1,10644,111,108,105,110,116,59,1,10770,97,114,114,59,1,8649,4,4,97,99,104,113,16328,16334,16339,16342,113,117,111,59,1,8250,114,59,3,55349,56519,59,1,8625,4,2,98,117,16348,16351,59,1,93,111,4,2,59,114,16358,16360,1,8217,59,1,8217,4,3,104,105,114,16371,16377,16383,114,101,101,59,1,8908,109,101,115,59,1,8906,105,4,4,59,101,102,108,16394,16396,16399,16402,1,9657,59,1,8885,59,1,9656,116,114,105,59,1,10702,108,117,104,97,114,59,1,10600,59,1,8478,4,19,97,98,99,100,101,102,104,105,108,109,111,112,113,114,115,116,117,119,122,16459,16466,16472,16572,16590,16672,16687,16746,16844,16850,16924,16963,16988,17115,17121,17154,17206,17614,17656,99,117,116,101,59,1,347,113,117,111,59,1,8218,4,10,59,69,97,99,101,105,110,112,115,121,16494,16496,16499,16513,16518,16531,16536,16556,16564,16569,1,8827,59,1,10932,4,2,112,114,16505,16508,59,1,10936,111,110,59,1,353,117,101,59,1,8829,4,2,59,100,16524,16526,1,10928,105,108,59,1,351,114,99,59,1,349,4,3,69,97,115,16544,16547,16551,59,1,10934,112,59,1,10938,105,109,59,1,8937,111,108,105,110,116,59,1,10771,105,109,59,1,8831,59,1,1089,111,116,4,3,59,98,101,16582,16584,16587,1,8901,59,1,8865,59,1,10854,4,7,65,97,99,109,115,116,120,16606,16611,16634,16642,16646,16652,16668,114,114,59,1,8664,114,4,2,104,114,16618,16622,107,59,1,10533,4,2,59,111,16628,16630,1,8600,119,59,1,8600,116,5,167,1,59,16640,1,167,105,59,1,59,119,97,114,59,1,10537,109,4,2,105,110,16659,16665,110,117,115,59,1,8726,59,1,8726,116,59,1,10038,114,4,2,59,111,16679,16682,3,55349,56624,119,110,59,1,8994,4,4,97,99,111,121,16697,16702,16716,16739,114,112,59,1,9839,4,2,104,121,16708,16713,99,121,59,1,1097,59,1,1096,114,116,4,2,109,112,16724,16729,105,100,59,1,8739,97,114,97,108,108,101,108,59,1,8741,5,173,1,59,16744,1,173,4,2,103,109,16752,16770,109,97,4,3,59,102,118,16762,16764,16767,1,963,59,1,962,59,1,962,4,8,59,100,101,103,108,110,112,114,16788,16790,16795,16806,16817,16828,16832,16838,1,8764,111,116,59,1,10858,4,2,59,113,16801,16803,1,8771,59,1,8771,4,2,59,69,16812,16814,1,10910,59,1,10912,4,2,59,69,16823,16825,1,10909,59,1,10911,101,59,1,8774,108,117,115,59,1,10788,97,114,114,59,1,10610,97,114,114,59,1,8592,4,4,97,101,105,116,16860,16883,16891,16904,4,2,108,115,16866,16878,108,115,101,116,109,105,110,117,115,59,1,8726,104,112,59,1,10803,112,97,114,115,108,59,1,10724,4,2,100,108,16897,16900,59,1,8739,101,59,1,8995,4,2,59,101,16910,16912,1,10922,4,2,59,115,16918,16920,1,10924,59,3,10924,65024,4,3,102,108,112,16932,16938,16958,116,99,121,59,1,1100,4,2,59,98,16944,16946,1,47,4,2,59,97,16952,16954,1,10692,114,59,1,9023,102,59,3,55349,56676,97,4,2,100,114,16970,16985,101,115,4,2,59,117,16978,16980,1,9824,105,116,59,1,9824,59,1,8741,4,3,99,115,117,16996,17028,17089,4,2,97,117,17002,17015,112,4,2,59,115,17009,17011,1,8851,59,3,8851,65024,112,4,2,59,115,17022,17024,1,8852,59,3,8852,65024,117,4,2,98,112,17035,17062,4,3,59,101,115,17043,17045,17048,1,8847,59,1,8849,101,116,4,2,59,101,17056,17058,1,8847,113,59,1,8849,4,3,59,101,115,17070,17072,17075,1,8848,59,1,8850,101,116,4,2,59,101,17083,17085,1,8848,113,59,1,8850,4,3,59,97,102,17097,17099,17112,1,9633,114,4,2,101,102,17106,17109,59,1,9633,59,1,9642,59,1,9642,97,114,114,59,1,8594,4,4,99,101,109,116,17131,17136,17142,17148,114,59,3,55349,56520,116,109,110,59,1,8726,105,108,101,59,1,8995,97,114,102,59,1,8902,4,2,97,114,17160,17172,114,4,2,59,102,17167,17169,1,9734,59,1,9733,4,2,97,110,17178,17202,105,103,104,116,4,2,101,112,17188,17197,112,115,105,108,111,110,59,1,1013,104,105,59,1,981,115,59,1,175,4,5,98,99,109,110,112,17218,17351,17420,17423,17427,4,9,59,69,100,101,109,110,112,114,115,17238,17240,17243,17248,17261,17267,17279,17285,17291,1,8834,59,1,10949,111,116,59,1,10941,4,2,59,100,17254,17256,1,8838,111,116,59,1,10947,117,108,116,59,1,10945,4,2,69,101,17273,17276,59,1,10955,59,1,8842,108,117,115,59,1,10943,97,114,114,59,1,10617,4,3,101,105,117,17299,17335,17339,116,4,3,59,101,110,17308,17310,17322,1,8834,113,4,2,59,113,17317,17319,1,8838,59,1,10949,101,113,4,2,59,113,17330,17332,1,8842,59,1,10955,109,59,1,10951,4,2,98,112,17345,17348,59,1,10965,59,1,10963,99,4,6,59,97,99,101,110,115,17366,17368,17376,17385,17389,17415,1,8827,112,112,114,111,120,59,1,10936,117,114,108,121,101,113,59,1,8829,113,59,1,10928,4,3,97,101,115,17397,17405,17410,112,112,114,111,120,59,1,10938,113,113,59,1,10934,105,109,59,1,8937,105,109,59,1,8831,59,1,8721,103,59,1,9834,4,13,49,50,51,59,69,100,101,104,108,109,110,112,115,17455,17462,17469,17476,17478,17481,17496,17509,17524,17530,17536,17548,17554,5,185,1,59,17460,1,185,5,178,1,59,17467,1,178,5,179,1,59,17474,1,179,1,8835,59,1,10950,4,2,111,115,17487,17491,116,59,1,10942,117,98,59,1,10968,4,2,59,100,17502,17504,1,8839,111,116,59,1,10948,115,4,2,111,117,17516,17520,108,59,1,10185,98,59,1,10967,97,114,114,59,1,10619,117,108,116,59,1,10946,4,2,69,101,17542,17545,59,1,10956,59,1,8843,108,117,115,59,1,10944,4,3,101,105,117,17562,17598,17602,116,4,3,59,101,110,17571,17573,17585,1,8835,113,4,2,59,113,17580,17582,1,8839,59,1,10950,101,113,4,2,59,113,17593,17595,1,8843,59,1,10956,109,59,1,10952,4,2,98,112,17608,17611,59,1,10964,59,1,10966,4,3,65,97,110,17622,17627,17650,114,114,59,1,8665,114,4,2,104,114,17634,17638,107,59,1,10534,4,2,59,111,17644,17646,1,8601,119,59,1,8601,119,97,114,59,1,10538,108,105,103,5,223,1,59,17664,1,223,4,13,97,98,99,100,101,102,104,105,111,112,114,115,119,17694,17709,17714,17737,17742,17749,17754,17860,17905,17957,17964,18090,18122,4,2,114,117,17700,17706,103,101,116,59,1,8982,59,1,964,114,107,59,1,9140,4,3,97,101,121,17722,17728,17734,114,111,110,59,1,357,100,105,108,59,1,355,59,1,1090,111,116,59,1,8411,108,114,101,99,59,1,8981,114,59,3,55349,56625,4,4,101,105,107,111,17764,17805,17836,17851,4,2,114,116,17770,17786,101,4,2,52,102,17777,17780,59,1,8756,111,114,101,59,1,8756,97,4,3,59,115,118,17795,17797,17802,1,952,121,109,59,1,977,59,1,977,4,2,99,110,17811,17831,107,4,2,97,115,17818,17826,112,112,114,111,120,59,1,8776,105,109,59,1,8764,115,112,59,1,8201,4,2,97,115,17842,17846,112,59,1,8776,105,109,59,1,8764,114,110,5,254,1,59,17858,1,254,4,3,108,109,110,17868,17873,17901,100,101,59,1,732,101,115,5,215,3,59,98,100,17884,17886,17898,1,215,4,2,59,97,17892,17894,1,8864,114,59,1,10801,59,1,10800,116,59,1,8749,4,3,101,112,115,17913,17917,17953,97,59,1,10536,4,4,59,98,99,102,17927,17929,17934,17939,1,8868,111,116,59,1,9014,105,114,59,1,10993,4,2,59,111,17945,17948,3,55349,56677,114,107,59,1,10970,97,59,1,10537,114,105,109,101,59,1,8244,4,3,97,105,112,17972,17977,18082,100,101,59,1,8482,4,7,97,100,101,109,112,115,116,17993,18051,18056,18059,18066,18072,18076,110,103,108,101,4,5,59,100,108,113,114,18009,18011,18017,18032,18035,1,9653,111,119,110,59,1,9663,101,102,116,4,2,59,101,18026,18028,1,9667,113,59,1,8884,59,1,8796,105,103,104,116,4,2,59,101,18045,18047,1,9657,113,59,1,8885,111,116,59,1,9708,59,1,8796,105,110,117,115,59,1,10810,108,117,115,59,1,10809,98,59,1,10701,105,109,101,59,1,10811,101,122,105,117,109,59,1,9186,4,3,99,104,116,18098,18111,18116,4,2,114,121,18104,18108,59,3,55349,56521,59,1,1094,99,121,59,1,1115,114,111,107,59,1,359,4,2,105,111,18128,18133,120,116,59,1,8812,104,101,97,100,4,2,108,114,18143,18154,101,102,116,97,114,114,111,119,59,1,8606,105,103,104,116,97,114,114,111,119,59,1,8608,4,18,65,72,97,98,99,100,102,103,104,108,109,111,112,114,115,116,117,119,18204,18209,18214,18234,18250,18268,18292,18308,18319,18343,18379,18397,18413,18504,18547,18553,18584,18603,114,114,59,1,8657,97,114,59,1,10595,4,2,99,114,18220,18230,117,116,101,5,250,1,59,18228,1,250,114,59,1,8593,114,4,2,99,101,18241,18245,121,59,1,1118,118,101,59,1,365,4,2,105,121,18256,18265,114,99,5,251,1,59,18263,1,251,59,1,1091,4,3,97,98,104,18276,18281,18287,114,114,59,1,8645,108,97,99,59,1,369,97,114,59,1,10606,4,2,105,114,18298,18304,115,104,116,59,1,10622,59,3,55349,56626,114,97,118,101,5,249,1,59,18317,1,249,4,2,97,98,18325,18338,114,4,2,108,114,18332,18335,59,1,8639,59,1,8638,108,107,59,1,9600,4,2,99,116,18349,18374,4,2,111,114,18355,18369,114,110,4,2,59,101,18363,18365,1,8988,114,59,1,8988,111,112,59,1,8975,114,105,59,1,9720,4,2,97,108,18385,18390,99,114,59,1,363,5,168,1,59,18395,1,168,4,2,103,112,18403,18408,111,110,59,1,371,102,59,3,55349,56678,4,6,97,100,104,108,115,117,18427,18434,18445,18470,18475,18494,114,114,111,119,59,1,8593,111,119,110,97,114,114,111,119,59,1,8597,97,114,112,111,111,110,4,2,108,114,18457,18463,101,102,116,59,1,8639,105,103,104,116,59,1,8638,117,115,59,1,8846,105,4,3,59,104,108,18484,18486,18489,1,965,59,1,978,111,110,59,1,965,112,97,114,114,111,119,115,59,1,8648,4,3,99,105,116,18512,18537,18542,4,2,111,114,18518,18532,114,110,4,2,59,101,18526,18528,1,8989,114,59,1,8989,111,112,59,1,8974,110,103,59,1,367,114,105,59,1,9721,99,114,59,3,55349,56522,4,3,100,105,114,18561,18566,18572,111,116,59,1,8944,108,100,101,59,1,361,105,4,2,59,102,18579,18581,1,9653,59,1,9652,4,2,97,109,18590,18595,114,114,59,1,8648,108,5,252,1,59,18601,1,252,97,110,103,108,101,59,1,10663,4,15,65,66,68,97,99,100,101,102,108,110,111,112,114,115,122,18643,18648,18661,18667,18847,18851,18857,18904,18909,18915,18931,18937,18943,18949,18996,114,114,59,1,8661,97,114,4,2,59,118,18656,18658,1,10984,59,1,10985,97,115,104,59,1,8872,4,2,110,114,18673,18679,103,114,116,59,1,10652,4,7,101,107,110,112,114,115,116,18695,18704,18711,18720,18742,18754,18810,112,115,105,108,111,110,59,1,1013,97,112,112,97,59,1,1008,111,116,104,105,110,103,59,1,8709,4,3,104,105,114,18728,18732,18735,105,59,1,981,59,1,982,111,112,116,111,59,1,8733,4,2,59,104,18748,18750,1,8597,111,59,1,1009,4,2,105,117,18760,18766,103,109,97,59,1,962,4,2,98,112,18772,18791,115,101,116,110,101,113,4,2,59,113,18784,18787,3,8842,65024,59,3,10955,65024,115,101,116,110,101,113,4,2,59,113,18803,18806,3,8843,65024,59,3,10956,65024,4,2,104,114,18816,18822,101,116,97,59,1,977,105,97,110,103,108,101,4,2,108,114,18834,18840,101,102,116,59,1,8882,105,103,104,116,59,1,8883,121,59,1,1074,97,115,104,59,1,8866,4,3,101,108,114,18865,18884,18890,4,3,59,98,101,18873,18875,18880,1,8744,97,114,59,1,8891,113,59,1,8794,108,105,112,59,1,8942,4,2,98,116,18896,18901,97,114,59,1,124,59,1,124,114,59,3,55349,56627,116,114,105,59,1,8882,115,117,4,2,98,112,18923,18927,59,3,8834,8402,59,3,8835,8402,112,102,59,3,55349,56679,114,111,112,59,1,8733,116,114,105,59,1,8883,4,2,99,117,18955,18960,114,59,3,55349,56523,4,2,98,112,18966,18981,110,4,2,69,101,18973,18977,59,3,10955,65024,59,3,8842,65024,110,4,2,69,101,18988,18992,59,3,10956,65024,59,3,8843,65024,105,103,122,97,103,59,1,10650,4,7,99,101,102,111,112,114,115,19020,19026,19061,19066,19072,19075,19089,105,114,99,59,1,373,4,2,100,105,19032,19055,4,2,98,103,19038,19043,97,114,59,1,10847,101,4,2,59,113,19050,19052,1,8743,59,1,8793,101,114,112,59,1,8472,114,59,3,55349,56628,112,102,59,3,55349,56680,59,1,8472,4,2,59,101,19081,19083,1,8768,97,116,104,59,1,8768,99,114,59,3,55349,56524,4,14,99,100,102,104,105,108,109,110,111,114,115,117,118,119,19125,19146,19152,19157,19173,19176,19192,19197,19202,19236,19252,19269,19286,19291,4,3,97,105,117,19133,19137,19142,112,59,1,8898,114,99,59,1,9711,112,59,1,8899,116,114,105,59,1,9661,114,59,3,55349,56629,4,2,65,97,19163,19168,114,114,59,1,10234,114,114,59,1,10231,59,1,958,4,2,65,97,19182,19187,114,114,59,1,10232,114,114,59,1,10229,97,112,59,1,10236,105,115,59,1,8955,4,3,100,112,116,19210,19215,19230,111,116,59,1,10752,4,2,102,108,19221,19225,59,3,55349,56681,117,115,59,1,10753,105,109,101,59,1,10754,4,2,65,97,19242,19247,114,114,59,1,10233,114,114,59,1,10230,4,2,99,113,19258,19263,114,59,3,55349,56525,99,117,112,59,1,10758,4,2,112,116,19275,19281,108,117,115,59,1,10756,114,105,59,1,9651,101,101,59,1,8897,101,100,103,101,59,1,8896,4,8,97,99,101,102,105,111,115,117,19316,19335,19349,19357,19362,19367,19373,19379,99,4,2,117,121,19323,19332,116,101,5,253,1,59,19330,1,253,59,1,1103,4,2,105,121,19341,19346,114,99,59,1,375,59,1,1099,110,5,165,1,59,19355,1,165,114,59,3,55349,56630,99,121,59,1,1111,112,102,59,3,55349,56682,99,114,59,3,55349,56526,4,2,99,109,19385,19389,121,59,1,1102,108,5,255,1,59,19395,1,255,4,10,97,99,100,101,102,104,105,111,115,119,19419,19426,19441,19446,19462,19467,19472,19480,19486,19492,99,117,116,101,59,1,378,4,2,97,121,19432,19438,114,111,110,59,1,382,59,1,1079,111,116,59,1,380,4,2,101,116,19452,19458,116,114,102,59,1,8488,97,59,1,950,114,59,3,55349,56631,99,121,59,1,1078,103,114,97,114,114,59,1,8669,112,102,59,3,55349,56683,99,114,59,3,55349,56527,4,2,106,110,19498,19501,59,1,8205,106,59,1,8204]);
-},{}],107:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 'use strict';
 
 var UNICODE = require('../common/unicode');
@@ -16409,7 +11428,6 @@ var Preprocessor = module.exports = function () {
     this.pos = -1;
     this.lastGapPos = -1;
     this.lastCharPos = -1;
-    this.droppedBufferSize = 0;
 
     this.gapStack = [];
 
@@ -16420,16 +11438,9 @@ var Preprocessor = module.exports = function () {
     this.bufferWaterline = DEFAULT_BUFFER_WATERLINE;
 };
 
-Object.defineProperty(Preprocessor.prototype, 'sourcePos', {
-    get: function () {
-        return this.droppedBufferSize + this.pos;
-    }
-});
-
 Preprocessor.prototype.dropParsedChunk = function () {
     if (this.pos > this.bufferWaterline) {
         this.lastCharPos -= this.pos;
-        this.droppedBufferSize += this.pos;
         this.html = this.html.substring(this.pos);
         this.pos = 0;
         this.lastGapPos = -1;
@@ -16531,7 +11542,7 @@ Preprocessor.prototype.retreat = function () {
 };
 
 
-},{"../common/unicode":91}],108:[function(require,module,exports){
+},{"../common/unicode":68}],81:[function(require,module,exports){
 'use strict';
 
 var DOCUMENT_MODE = require('../common/html').DOCUMENT_MODE;
@@ -16742,7 +11753,7 @@ exports.isElementNode = function (node) {
     return !!node.tagName;
 };
 
-},{"../common/html":89}],109:[function(require,module,exports){
+},{"../common/html":67}],82:[function(require,module,exports){
 'use strict';
 
 var doctype = require('../common/doctype'),
@@ -17082,7 +12093,1177 @@ exports.isElementNode = function (node) {
     return !!node.attribs;
 };
 
-},{"../common/doctype":87,"../common/html":89}],110:[function(require,module,exports){
+},{"../common/doctype":65,"../common/html":67}],83:[function(require,module,exports){
+'use strict';
+
+module.exports = function mergeOptions(defaults, options) {
+    options = options || Object.create(null);
+
+    return [defaults, options].reduce(function (merged, optObj) {
+        Object.keys(optObj).forEach(function (key) {
+            merged[key] = optObj[key];
+        });
+
+        return merged;
+    }, Object.create(null));
+};
+
+},{}],84:[function(require,module,exports){
+'use strict';
+
+var Mixin = module.exports = function (host) {
+    var originalMethods = {},
+        overriddenMethods = this._getOverriddenMethods(this, originalMethods);
+
+    Object.keys(overriddenMethods).forEach(function (key) {
+        if (typeof overriddenMethods[key] === 'function') {
+            originalMethods[key] = host[key];
+            host[key] = overriddenMethods[key];
+        }
+    });
+};
+
+Mixin.prototype._getOverriddenMethods = function () {
+    throw new Error('Not implemented');
+};
+
+
+},{}],85:[function(require,module,exports){
+(function (process,global){
+/*! *****************************************************************************
+Copyright (C) Microsoft. All rights reserved.
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+MERCHANTABLITY OR NON-INFRINGEMENT.
+
+See the Apache Version 2.0 License for specific language governing permissions
+and limitations under the License.
+***************************************************************************** */
+var Reflect;
+(function (Reflect) {
+    // Metadata Proposal
+    // https://rbuckton.github.io/reflect-metadata/
+    (function (factory) {
+        var root = typeof global === "object" ? global :
+            typeof self === "object" ? self :
+                typeof this === "object" ? this :
+                    Function("return this;")();
+        var exporter = makeExporter(Reflect);
+        if (typeof root.Reflect === "undefined") {
+            root.Reflect = Reflect;
+        }
+        else {
+            exporter = makeExporter(root.Reflect, exporter);
+        }
+        factory(exporter);
+        function makeExporter(target, previous) {
+            return function (key, value) {
+                if (typeof target[key] !== "function") {
+                    Object.defineProperty(target, key, { configurable: true, writable: true, value: value });
+                }
+                if (previous)
+                    previous(key, value);
+            };
+        }
+    })(function (exporter) {
+        var hasOwn = Object.prototype.hasOwnProperty;
+        // feature test for Symbol support
+        var supportsSymbol = typeof Symbol === "function";
+        var toPrimitiveSymbol = supportsSymbol && typeof Symbol.toPrimitive !== "undefined" ? Symbol.toPrimitive : "@@toPrimitive";
+        var iteratorSymbol = supportsSymbol && typeof Symbol.iterator !== "undefined" ? Symbol.iterator : "@@iterator";
+        var supportsCreate = typeof Object.create === "function"; // feature test for Object.create support
+        var supportsProto = { __proto__: [] } instanceof Array; // feature test for __proto__ support
+        var downLevel = !supportsCreate && !supportsProto;
+        var HashMap = {
+            // create an object in dictionary mode (a.k.a. "slow" mode in v8)
+            create: supportsCreate
+                ? function () { return MakeDictionary(Object.create(null)); }
+                : supportsProto
+                    ? function () { return MakeDictionary({ __proto__: null }); }
+                    : function () { return MakeDictionary({}); },
+            has: downLevel
+                ? function (map, key) { return hasOwn.call(map, key); }
+                : function (map, key) { return key in map; },
+            get: downLevel
+                ? function (map, key) { return hasOwn.call(map, key) ? map[key] : undefined; }
+                : function (map, key) { return map[key]; },
+        };
+        // Load global or shim versions of Map, Set, and WeakMap
+        var functionPrototype = Object.getPrototypeOf(Function);
+        var usePolyfill = typeof process === "object" && process.env && process.env["REFLECT_METADATA_USE_MAP_POLYFILL"] === "true";
+        var _Map = !usePolyfill && typeof Map === "function" && typeof Map.prototype.entries === "function" ? Map : CreateMapPolyfill();
+        var _Set = !usePolyfill && typeof Set === "function" && typeof Set.prototype.entries === "function" ? Set : CreateSetPolyfill();
+        var _WeakMap = !usePolyfill && typeof WeakMap === "function" ? WeakMap : CreateWeakMapPolyfill();
+        // [[Metadata]] internal slot
+        // https://rbuckton.github.io/reflect-metadata/#ordinary-object-internal-methods-and-internal-slots
+        var Metadata = new _WeakMap();
+        /**
+         * Applies a set of decorators to a property of a target object.
+         * @param decorators An array of decorators.
+         * @param target The target object.
+         * @param propertyKey (Optional) The property key to decorate.
+         * @param attributes (Optional) The property descriptor for the target key.
+         * @remarks Decorators are applied in reverse order.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     Example = Reflect.decorate(decoratorsArray, Example);
+         *
+         *     // property (on constructor)
+         *     Reflect.decorate(decoratorsArray, Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     Reflect.decorate(decoratorsArray, Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     Object.defineProperty(Example, "staticMethod",
+         *         Reflect.decorate(decoratorsArray, Example, "staticMethod",
+         *             Object.getOwnPropertyDescriptor(Example, "staticMethod")));
+         *
+         *     // method (on prototype)
+         *     Object.defineProperty(Example.prototype, "method",
+         *         Reflect.decorate(decoratorsArray, Example.prototype, "method",
+         *             Object.getOwnPropertyDescriptor(Example.prototype, "method")));
+         *
+         */
+        function decorate(decorators, target, propertyKey, attributes) {
+            if (!IsUndefined(propertyKey)) {
+                if (!IsArray(decorators))
+                    throw new TypeError();
+                if (!IsObject(target))
+                    throw new TypeError();
+                if (!IsObject(attributes) && !IsUndefined(attributes) && !IsNull(attributes))
+                    throw new TypeError();
+                if (IsNull(attributes))
+                    attributes = undefined;
+                propertyKey = ToPropertyKey(propertyKey);
+                return DecorateProperty(decorators, target, propertyKey, attributes);
+            }
+            else {
+                if (!IsArray(decorators))
+                    throw new TypeError();
+                if (!IsConstructor(target))
+                    throw new TypeError();
+                return DecorateConstructor(decorators, target);
+            }
+        }
+        exporter("decorate", decorate);
+        // 4.1.2 Reflect.metadata(metadataKey, metadataValue)
+        // https://rbuckton.github.io/reflect-metadata/#reflect.metadata
+        /**
+         * A default metadata decorator factory that can be used on a class, class member, or parameter.
+         * @param metadataKey The key for the metadata entry.
+         * @param metadataValue The value for the metadata entry.
+         * @returns A decorator function.
+         * @remarks
+         * If `metadataKey` is already defined for the target and target key, the
+         * metadataValue for that key will be overwritten.
+         * @example
+         *
+         *     // constructor
+         *     @Reflect.metadata(key, value)
+         *     class Example {
+         *     }
+         *
+         *     // property (on constructor, TypeScript only)
+         *     class Example {
+         *         @Reflect.metadata(key, value)
+         *         static staticProperty;
+         *     }
+         *
+         *     // property (on prototype, TypeScript only)
+         *     class Example {
+         *         @Reflect.metadata(key, value)
+         *         property;
+         *     }
+         *
+         *     // method (on constructor)
+         *     class Example {
+         *         @Reflect.metadata(key, value)
+         *         static staticMethod() { }
+         *     }
+         *
+         *     // method (on prototype)
+         *     class Example {
+         *         @Reflect.metadata(key, value)
+         *         method() { }
+         *     }
+         *
+         */
+        function metadata(metadataKey, metadataValue) {
+            function decorator(target, propertyKey) {
+                if (!IsObject(target))
+                    throw new TypeError();
+                if (!IsUndefined(propertyKey) && !IsPropertyKey(propertyKey))
+                    throw new TypeError();
+                OrdinaryDefineOwnMetadata(metadataKey, metadataValue, target, propertyKey);
+            }
+            return decorator;
+        }
+        exporter("metadata", metadata);
+        /**
+         * Define a unique metadata entry on the target.
+         * @param metadataKey A key used to store and retrieve metadata.
+         * @param metadataValue A value that contains attached metadata.
+         * @param target The target object on which to define metadata.
+         * @param propertyKey (Optional) The property key for the target.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     Reflect.defineMetadata("custom:annotation", options, Example);
+         *
+         *     // property (on constructor)
+         *     Reflect.defineMetadata("custom:annotation", options, Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     Reflect.defineMetadata("custom:annotation", options, Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     Reflect.defineMetadata("custom:annotation", options, Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     Reflect.defineMetadata("custom:annotation", options, Example.prototype, "method");
+         *
+         *     // decorator factory as metadata-producing annotation.
+         *     function MyAnnotation(options): Decorator {
+         *         return (target, key?) => Reflect.defineMetadata("custom:annotation", options, target, key);
+         *     }
+         *
+         */
+        function defineMetadata(metadataKey, metadataValue, target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            return OrdinaryDefineOwnMetadata(metadataKey, metadataValue, target, propertyKey);
+        }
+        exporter("defineMetadata", defineMetadata);
+        /**
+         * Gets a value indicating whether the target object or its prototype chain has the provided metadata key defined.
+         * @param metadataKey A key used to store and retrieve metadata.
+         * @param target The target object on which the metadata is defined.
+         * @param propertyKey (Optional) The property key for the target.
+         * @returns `true` if the metadata key was defined on the target object or its prototype chain; otherwise, `false`.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     result = Reflect.hasMetadata("custom:annotation", Example);
+         *
+         *     // property (on constructor)
+         *     result = Reflect.hasMetadata("custom:annotation", Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     result = Reflect.hasMetadata("custom:annotation", Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     result = Reflect.hasMetadata("custom:annotation", Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     result = Reflect.hasMetadata("custom:annotation", Example.prototype, "method");
+         *
+         */
+        function hasMetadata(metadataKey, target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            return OrdinaryHasMetadata(metadataKey, target, propertyKey);
+        }
+        exporter("hasMetadata", hasMetadata);
+        /**
+         * Gets a value indicating whether the target object has the provided metadata key defined.
+         * @param metadataKey A key used to store and retrieve metadata.
+         * @param target The target object on which the metadata is defined.
+         * @param propertyKey (Optional) The property key for the target.
+         * @returns `true` if the metadata key was defined on the target object; otherwise, `false`.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     result = Reflect.hasOwnMetadata("custom:annotation", Example);
+         *
+         *     // property (on constructor)
+         *     result = Reflect.hasOwnMetadata("custom:annotation", Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     result = Reflect.hasOwnMetadata("custom:annotation", Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     result = Reflect.hasOwnMetadata("custom:annotation", Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     result = Reflect.hasOwnMetadata("custom:annotation", Example.prototype, "method");
+         *
+         */
+        function hasOwnMetadata(metadataKey, target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            return OrdinaryHasOwnMetadata(metadataKey, target, propertyKey);
+        }
+        exporter("hasOwnMetadata", hasOwnMetadata);
+        /**
+         * Gets the metadata value for the provided metadata key on the target object or its prototype chain.
+         * @param metadataKey A key used to store and retrieve metadata.
+         * @param target The target object on which the metadata is defined.
+         * @param propertyKey (Optional) The property key for the target.
+         * @returns The metadata value for the metadata key if found; otherwise, `undefined`.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     result = Reflect.getMetadata("custom:annotation", Example);
+         *
+         *     // property (on constructor)
+         *     result = Reflect.getMetadata("custom:annotation", Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     result = Reflect.getMetadata("custom:annotation", Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     result = Reflect.getMetadata("custom:annotation", Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     result = Reflect.getMetadata("custom:annotation", Example.prototype, "method");
+         *
+         */
+        function getMetadata(metadataKey, target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            return OrdinaryGetMetadata(metadataKey, target, propertyKey);
+        }
+        exporter("getMetadata", getMetadata);
+        /**
+         * Gets the metadata value for the provided metadata key on the target object.
+         * @param metadataKey A key used to store and retrieve metadata.
+         * @param target The target object on which the metadata is defined.
+         * @param propertyKey (Optional) The property key for the target.
+         * @returns The metadata value for the metadata key if found; otherwise, `undefined`.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     result = Reflect.getOwnMetadata("custom:annotation", Example);
+         *
+         *     // property (on constructor)
+         *     result = Reflect.getOwnMetadata("custom:annotation", Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     result = Reflect.getOwnMetadata("custom:annotation", Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     result = Reflect.getOwnMetadata("custom:annotation", Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     result = Reflect.getOwnMetadata("custom:annotation", Example.prototype, "method");
+         *
+         */
+        function getOwnMetadata(metadataKey, target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            return OrdinaryGetOwnMetadata(metadataKey, target, propertyKey);
+        }
+        exporter("getOwnMetadata", getOwnMetadata);
+        /**
+         * Gets the metadata keys defined on the target object or its prototype chain.
+         * @param target The target object on which the metadata is defined.
+         * @param propertyKey (Optional) The property key for the target.
+         * @returns An array of unique metadata keys.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     result = Reflect.getMetadataKeys(Example);
+         *
+         *     // property (on constructor)
+         *     result = Reflect.getMetadataKeys(Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     result = Reflect.getMetadataKeys(Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     result = Reflect.getMetadataKeys(Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     result = Reflect.getMetadataKeys(Example.prototype, "method");
+         *
+         */
+        function getMetadataKeys(target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            return OrdinaryMetadataKeys(target, propertyKey);
+        }
+        exporter("getMetadataKeys", getMetadataKeys);
+        /**
+         * Gets the unique metadata keys defined on the target object.
+         * @param target The target object on which the metadata is defined.
+         * @param propertyKey (Optional) The property key for the target.
+         * @returns An array of unique metadata keys.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     result = Reflect.getOwnMetadataKeys(Example);
+         *
+         *     // property (on constructor)
+         *     result = Reflect.getOwnMetadataKeys(Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     result = Reflect.getOwnMetadataKeys(Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     result = Reflect.getOwnMetadataKeys(Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     result = Reflect.getOwnMetadataKeys(Example.prototype, "method");
+         *
+         */
+        function getOwnMetadataKeys(target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            return OrdinaryOwnMetadataKeys(target, propertyKey);
+        }
+        exporter("getOwnMetadataKeys", getOwnMetadataKeys);
+        /**
+         * Deletes the metadata entry from the target object with the provided key.
+         * @param metadataKey A key used to store and retrieve metadata.
+         * @param target The target object on which the metadata is defined.
+         * @param propertyKey (Optional) The property key for the target.
+         * @returns `true` if the metadata entry was found and deleted; otherwise, false.
+         * @example
+         *
+         *     class Example {
+         *         // property declarations are not part of ES6, though they are valid in TypeScript:
+         *         // static staticProperty;
+         *         // property;
+         *
+         *         constructor(p) { }
+         *         static staticMethod(p) { }
+         *         method(p) { }
+         *     }
+         *
+         *     // constructor
+         *     result = Reflect.deleteMetadata("custom:annotation", Example);
+         *
+         *     // property (on constructor)
+         *     result = Reflect.deleteMetadata("custom:annotation", Example, "staticProperty");
+         *
+         *     // property (on prototype)
+         *     result = Reflect.deleteMetadata("custom:annotation", Example.prototype, "property");
+         *
+         *     // method (on constructor)
+         *     result = Reflect.deleteMetadata("custom:annotation", Example, "staticMethod");
+         *
+         *     // method (on prototype)
+         *     result = Reflect.deleteMetadata("custom:annotation", Example.prototype, "method");
+         *
+         */
+        function deleteMetadata(metadataKey, target, propertyKey) {
+            if (!IsObject(target))
+                throw new TypeError();
+            if (!IsUndefined(propertyKey))
+                propertyKey = ToPropertyKey(propertyKey);
+            var metadataMap = GetOrCreateMetadataMap(target, propertyKey, /*Create*/ false);
+            if (IsUndefined(metadataMap))
+                return false;
+            if (!metadataMap.delete(metadataKey))
+                return false;
+            if (metadataMap.size > 0)
+                return true;
+            var targetMetadata = Metadata.get(target);
+            targetMetadata.delete(propertyKey);
+            if (targetMetadata.size > 0)
+                return true;
+            Metadata.delete(target);
+            return true;
+        }
+        exporter("deleteMetadata", deleteMetadata);
+        function DecorateConstructor(decorators, target) {
+            for (var i = decorators.length - 1; i >= 0; --i) {
+                var decorator = decorators[i];
+                var decorated = decorator(target);
+                if (!IsUndefined(decorated) && !IsNull(decorated)) {
+                    if (!IsConstructor(decorated))
+                        throw new TypeError();
+                    target = decorated;
+                }
+            }
+            return target;
+        }
+        function DecorateProperty(decorators, target, propertyKey, descriptor) {
+            for (var i = decorators.length - 1; i >= 0; --i) {
+                var decorator = decorators[i];
+                var decorated = decorator(target, propertyKey, descriptor);
+                if (!IsUndefined(decorated) && !IsNull(decorated)) {
+                    if (!IsObject(decorated))
+                        throw new TypeError();
+                    descriptor = decorated;
+                }
+            }
+            return descriptor;
+        }
+        function GetOrCreateMetadataMap(O, P, Create) {
+            var targetMetadata = Metadata.get(O);
+            if (IsUndefined(targetMetadata)) {
+                if (!Create)
+                    return undefined;
+                targetMetadata = new _Map();
+                Metadata.set(O, targetMetadata);
+            }
+            var metadataMap = targetMetadata.get(P);
+            if (IsUndefined(metadataMap)) {
+                if (!Create)
+                    return undefined;
+                metadataMap = new _Map();
+                targetMetadata.set(P, metadataMap);
+            }
+            return metadataMap;
+        }
+        // 3.1.1.1 OrdinaryHasMetadata(MetadataKey, O, P)
+        // https://rbuckton.github.io/reflect-metadata/#ordinaryhasmetadata
+        function OrdinaryHasMetadata(MetadataKey, O, P) {
+            var hasOwn = OrdinaryHasOwnMetadata(MetadataKey, O, P);
+            if (hasOwn)
+                return true;
+            var parent = OrdinaryGetPrototypeOf(O);
+            if (!IsNull(parent))
+                return OrdinaryHasMetadata(MetadataKey, parent, P);
+            return false;
+        }
+        // 3.1.2.1 OrdinaryHasOwnMetadata(MetadataKey, O, P)
+        // https://rbuckton.github.io/reflect-metadata/#ordinaryhasownmetadata
+        function OrdinaryHasOwnMetadata(MetadataKey, O, P) {
+            var metadataMap = GetOrCreateMetadataMap(O, P, /*Create*/ false);
+            if (IsUndefined(metadataMap))
+                return false;
+            return ToBoolean(metadataMap.has(MetadataKey));
+        }
+        // 3.1.3.1 OrdinaryGetMetadata(MetadataKey, O, P)
+        // https://rbuckton.github.io/reflect-metadata/#ordinarygetmetadata
+        function OrdinaryGetMetadata(MetadataKey, O, P) {
+            var hasOwn = OrdinaryHasOwnMetadata(MetadataKey, O, P);
+            if (hasOwn)
+                return OrdinaryGetOwnMetadata(MetadataKey, O, P);
+            var parent = OrdinaryGetPrototypeOf(O);
+            if (!IsNull(parent))
+                return OrdinaryGetMetadata(MetadataKey, parent, P);
+            return undefined;
+        }
+        // 3.1.4.1 OrdinaryGetOwnMetadata(MetadataKey, O, P)
+        // https://rbuckton.github.io/reflect-metadata/#ordinarygetownmetadata
+        function OrdinaryGetOwnMetadata(MetadataKey, O, P) {
+            var metadataMap = GetOrCreateMetadataMap(O, P, /*Create*/ false);
+            if (IsUndefined(metadataMap))
+                return undefined;
+            return metadataMap.get(MetadataKey);
+        }
+        // 3.1.5.1 OrdinaryDefineOwnMetadata(MetadataKey, MetadataValue, O, P)
+        // https://rbuckton.github.io/reflect-metadata/#ordinarydefineownmetadata
+        function OrdinaryDefineOwnMetadata(MetadataKey, MetadataValue, O, P) {
+            var metadataMap = GetOrCreateMetadataMap(O, P, /*Create*/ true);
+            metadataMap.set(MetadataKey, MetadataValue);
+        }
+        // 3.1.6.1 OrdinaryMetadataKeys(O, P)
+        // https://rbuckton.github.io/reflect-metadata/#ordinarymetadatakeys
+        function OrdinaryMetadataKeys(O, P) {
+            var ownKeys = OrdinaryOwnMetadataKeys(O, P);
+            var parent = OrdinaryGetPrototypeOf(O);
+            if (parent === null)
+                return ownKeys;
+            var parentKeys = OrdinaryMetadataKeys(parent, P);
+            if (parentKeys.length <= 0)
+                return ownKeys;
+            if (ownKeys.length <= 0)
+                return parentKeys;
+            var set = new _Set();
+            var keys = [];
+            for (var _i = 0, ownKeys_1 = ownKeys; _i < ownKeys_1.length; _i++) {
+                var key = ownKeys_1[_i];
+                var hasKey = set.has(key);
+                if (!hasKey) {
+                    set.add(key);
+                    keys.push(key);
+                }
+            }
+            for (var _a = 0, parentKeys_1 = parentKeys; _a < parentKeys_1.length; _a++) {
+                var key = parentKeys_1[_a];
+                var hasKey = set.has(key);
+                if (!hasKey) {
+                    set.add(key);
+                    keys.push(key);
+                }
+            }
+            return keys;
+        }
+        // 3.1.7.1 OrdinaryOwnMetadataKeys(O, P)
+        // https://rbuckton.github.io/reflect-metadata/#ordinaryownmetadatakeys
+        function OrdinaryOwnMetadataKeys(O, P) {
+            var keys = [];
+            var metadataMap = GetOrCreateMetadataMap(O, P, /*Create*/ false);
+            if (IsUndefined(metadataMap))
+                return keys;
+            var keysObj = metadataMap.keys();
+            var iterator = GetIterator(keysObj);
+            var k = 0;
+            while (true) {
+                var next = IteratorStep(iterator);
+                if (!next) {
+                    keys.length = k;
+                    return keys;
+                }
+                var nextValue = IteratorValue(next);
+                try {
+                    keys[k] = nextValue;
+                }
+                catch (e) {
+                    try {
+                        IteratorClose(iterator);
+                    }
+                    finally {
+                        throw e;
+                    }
+                }
+                k++;
+            }
+        }
+        // 6 ECMAScript Data Typ0es and Values
+        // https://tc39.github.io/ecma262/#sec-ecmascript-data-types-and-values
+        function Type(x) {
+            if (x === null)
+                return 1 /* Null */;
+            switch (typeof x) {
+                case "undefined": return 0 /* Undefined */;
+                case "boolean": return 2 /* Boolean */;
+                case "string": return 3 /* String */;
+                case "symbol": return 4 /* Symbol */;
+                case "number": return 5 /* Number */;
+                case "object": return x === null ? 1 /* Null */ : 6 /* Object */;
+                default: return 6 /* Object */;
+            }
+        }
+        // 6.1.1 The Undefined Type
+        // https://tc39.github.io/ecma262/#sec-ecmascript-language-types-undefined-type
+        function IsUndefined(x) {
+            return x === undefined;
+        }
+        // 6.1.2 The Null Type
+        // https://tc39.github.io/ecma262/#sec-ecmascript-language-types-null-type
+        function IsNull(x) {
+            return x === null;
+        }
+        // 6.1.5 The Symbol Type
+        // https://tc39.github.io/ecma262/#sec-ecmascript-language-types-symbol-type
+        function IsSymbol(x) {
+            return typeof x === "symbol";
+        }
+        // 6.1.7 The Object Type
+        // https://tc39.github.io/ecma262/#sec-object-type
+        function IsObject(x) {
+            return typeof x === "object" ? x !== null : typeof x === "function";
+        }
+        // 7.1 Type Conversion
+        // https://tc39.github.io/ecma262/#sec-type-conversion
+        // 7.1.1 ToPrimitive(input [, PreferredType])
+        // https://tc39.github.io/ecma262/#sec-toprimitive
+        function ToPrimitive(input, PreferredType) {
+            switch (Type(input)) {
+                case 0 /* Undefined */: return input;
+                case 1 /* Null */: return input;
+                case 2 /* Boolean */: return input;
+                case 3 /* String */: return input;
+                case 4 /* Symbol */: return input;
+                case 5 /* Number */: return input;
+            }
+            var hint = PreferredType === 3 /* String */ ? "string" : PreferredType === 5 /* Number */ ? "number" : "default";
+            var exoticToPrim = GetMethod(input, toPrimitiveSymbol);
+            if (exoticToPrim !== undefined) {
+                var result = exoticToPrim.call(input, hint);
+                if (IsObject(result))
+                    throw new TypeError();
+                return result;
+            }
+            return OrdinaryToPrimitive(input, hint === "default" ? "number" : hint);
+        }
+        // 7.1.1.1 OrdinaryToPrimitive(O, hint)
+        // https://tc39.github.io/ecma262/#sec-ordinarytoprimitive
+        function OrdinaryToPrimitive(O, hint) {
+            if (hint === "string") {
+                var toString_1 = O.toString;
+                if (IsCallable(toString_1)) {
+                    var result = toString_1.call(O);
+                    if (!IsObject(result))
+                        return result;
+                }
+                var valueOf = O.valueOf;
+                if (IsCallable(valueOf)) {
+                    var result = valueOf.call(O);
+                    if (!IsObject(result))
+                        return result;
+                }
+            }
+            else {
+                var valueOf = O.valueOf;
+                if (IsCallable(valueOf)) {
+                    var result = valueOf.call(O);
+                    if (!IsObject(result))
+                        return result;
+                }
+                var toString_2 = O.toString;
+                if (IsCallable(toString_2)) {
+                    var result = toString_2.call(O);
+                    if (!IsObject(result))
+                        return result;
+                }
+            }
+            throw new TypeError();
+        }
+        // 7.1.2 ToBoolean(argument)
+        // https://tc39.github.io/ecma262/2016/#sec-toboolean
+        function ToBoolean(argument) {
+            return !!argument;
+        }
+        // 7.1.12 ToString(argument)
+        // https://tc39.github.io/ecma262/#sec-tostring
+        function ToString(argument) {
+            return "" + argument;
+        }
+        // 7.1.14 ToPropertyKey(argument)
+        // https://tc39.github.io/ecma262/#sec-topropertykey
+        function ToPropertyKey(argument) {
+            var key = ToPrimitive(argument, 3 /* String */);
+            if (IsSymbol(key))
+                return key;
+            return ToString(key);
+        }
+        // 7.2 Testing and Comparison Operations
+        // https://tc39.github.io/ecma262/#sec-testing-and-comparison-operations
+        // 7.2.2 IsArray(argument)
+        // https://tc39.github.io/ecma262/#sec-isarray
+        function IsArray(argument) {
+            return Array.isArray
+                ? Array.isArray(argument)
+                : argument instanceof Object
+                    ? argument instanceof Array
+                    : Object.prototype.toString.call(argument) === "[object Array]";
+        }
+        // 7.2.3 IsCallable(argument)
+        // https://tc39.github.io/ecma262/#sec-iscallable
+        function IsCallable(argument) {
+            // NOTE: This is an approximation as we cannot check for [[Call]] internal method.
+            return typeof argument === "function";
+        }
+        // 7.2.4 IsConstructor(argument)
+        // https://tc39.github.io/ecma262/#sec-isconstructor
+        function IsConstructor(argument) {
+            // NOTE: This is an approximation as we cannot check for [[Construct]] internal method.
+            return typeof argument === "function";
+        }
+        // 7.2.7 IsPropertyKey(argument)
+        // https://tc39.github.io/ecma262/#sec-ispropertykey
+        function IsPropertyKey(argument) {
+            switch (Type(argument)) {
+                case 3 /* String */: return true;
+                case 4 /* Symbol */: return true;
+                default: return false;
+            }
+        }
+        // 7.3 Operations on Objects
+        // https://tc39.github.io/ecma262/#sec-operations-on-objects
+        // 7.3.9 GetMethod(V, P)
+        // https://tc39.github.io/ecma262/#sec-getmethod
+        function GetMethod(V, P) {
+            var func = V[P];
+            if (func === undefined || func === null)
+                return undefined;
+            if (!IsCallable(func))
+                throw new TypeError();
+            return func;
+        }
+        // 7.4 Operations on Iterator Objects
+        // https://tc39.github.io/ecma262/#sec-operations-on-iterator-objects
+        function GetIterator(obj) {
+            var method = GetMethod(obj, iteratorSymbol);
+            if (!IsCallable(method))
+                throw new TypeError(); // from Call
+            var iterator = method.call(obj);
+            if (!IsObject(iterator))
+                throw new TypeError();
+            return iterator;
+        }
+        // 7.4.4 IteratorValue(iterResult)
+        // https://tc39.github.io/ecma262/2016/#sec-iteratorvalue
+        function IteratorValue(iterResult) {
+            return iterResult.value;
+        }
+        // 7.4.5 IteratorStep(iterator)
+        // https://tc39.github.io/ecma262/#sec-iteratorstep
+        function IteratorStep(iterator) {
+            var result = iterator.next();
+            return result.done ? false : result;
+        }
+        // 7.4.6 IteratorClose(iterator, completion)
+        // https://tc39.github.io/ecma262/#sec-iteratorclose
+        function IteratorClose(iterator) {
+            var f = iterator["return"];
+            if (f)
+                f.call(iterator);
+        }
+        // 9.1 Ordinary Object Internal Methods and Internal Slots
+        // https://tc39.github.io/ecma262/#sec-ordinary-object-internal-methods-and-internal-slots
+        // 9.1.1.1 OrdinaryGetPrototypeOf(O)
+        // https://tc39.github.io/ecma262/#sec-ordinarygetprototypeof
+        function OrdinaryGetPrototypeOf(O) {
+            var proto = Object.getPrototypeOf(O);
+            if (typeof O !== "function" || O === functionPrototype)
+                return proto;
+            // TypeScript doesn't set __proto__ in ES5, as it's non-standard.
+            // Try to determine the superclass constructor. Compatible implementations
+            // must either set __proto__ on a subclass constructor to the superclass constructor,
+            // or ensure each class has a valid `constructor` property on its prototype that
+            // points back to the constructor.
+            // If this is not the same as Function.[[Prototype]], then this is definately inherited.
+            // This is the case when in ES6 or when using __proto__ in a compatible browser.
+            if (proto !== functionPrototype)
+                return proto;
+            // If the super prototype is Object.prototype, null, or undefined, then we cannot determine the heritage.
+            var prototype = O.prototype;
+            var prototypeProto = prototype && Object.getPrototypeOf(prototype);
+            if (prototypeProto == null || prototypeProto === Object.prototype)
+                return proto;
+            // If the constructor was not a function, then we cannot determine the heritage.
+            var constructor = prototypeProto.constructor;
+            if (typeof constructor !== "function")
+                return proto;
+            // If we have some kind of self-reference, then we cannot determine the heritage.
+            if (constructor === O)
+                return proto;
+            // we have a pretty good guess at the heritage.
+            return constructor;
+        }
+        // naive Map shim
+        function CreateMapPolyfill() {
+            var cacheSentinel = {};
+            var arraySentinel = [];
+            var MapIterator = (function () {
+                function MapIterator(keys, values, selector) {
+                    this._index = 0;
+                    this._keys = keys;
+                    this._values = values;
+                    this._selector = selector;
+                }
+                MapIterator.prototype["@@iterator"] = function () { return this; };
+                MapIterator.prototype[iteratorSymbol] = function () { return this; };
+                MapIterator.prototype.next = function () {
+                    var index = this._index;
+                    if (index >= 0 && index < this._keys.length) {
+                        var result = this._selector(this._keys[index], this._values[index]);
+                        if (index + 1 >= this._keys.length) {
+                            this._index = -1;
+                            this._keys = arraySentinel;
+                            this._values = arraySentinel;
+                        }
+                        else {
+                            this._index++;
+                        }
+                        return { value: result, done: false };
+                    }
+                    return { value: undefined, done: true };
+                };
+                MapIterator.prototype.throw = function (error) {
+                    if (this._index >= 0) {
+                        this._index = -1;
+                        this._keys = arraySentinel;
+                        this._values = arraySentinel;
+                    }
+                    throw error;
+                };
+                MapIterator.prototype.return = function (value) {
+                    if (this._index >= 0) {
+                        this._index = -1;
+                        this._keys = arraySentinel;
+                        this._values = arraySentinel;
+                    }
+                    return { value: value, done: true };
+                };
+                return MapIterator;
+            }());
+            return (function () {
+                function Map() {
+                    this._keys = [];
+                    this._values = [];
+                    this._cacheKey = cacheSentinel;
+                    this._cacheIndex = -2;
+                }
+                Object.defineProperty(Map.prototype, "size", {
+                    get: function () { return this._keys.length; },
+                    enumerable: true,
+                    configurable: true
+                });
+                Map.prototype.has = function (key) { return this._find(key, /*insert*/ false) >= 0; };
+                Map.prototype.get = function (key) {
+                    var index = this._find(key, /*insert*/ false);
+                    return index >= 0 ? this._values[index] : undefined;
+                };
+                Map.prototype.set = function (key, value) {
+                    var index = this._find(key, /*insert*/ true);
+                    this._values[index] = value;
+                    return this;
+                };
+                Map.prototype.delete = function (key) {
+                    var index = this._find(key, /*insert*/ false);
+                    if (index >= 0) {
+                        var size = this._keys.length;
+                        for (var i = index + 1; i < size; i++) {
+                            this._keys[i - 1] = this._keys[i];
+                            this._values[i - 1] = this._values[i];
+                        }
+                        this._keys.length--;
+                        this._values.length--;
+                        if (key === this._cacheKey) {
+                            this._cacheKey = cacheSentinel;
+                            this._cacheIndex = -2;
+                        }
+                        return true;
+                    }
+                    return false;
+                };
+                Map.prototype.clear = function () {
+                    this._keys.length = 0;
+                    this._values.length = 0;
+                    this._cacheKey = cacheSentinel;
+                    this._cacheIndex = -2;
+                };
+                Map.prototype.keys = function () { return new MapIterator(this._keys, this._values, getKey); };
+                Map.prototype.values = function () { return new MapIterator(this._keys, this._values, getValue); };
+                Map.prototype.entries = function () { return new MapIterator(this._keys, this._values, getEntry); };
+                Map.prototype["@@iterator"] = function () { return this.entries(); };
+                Map.prototype[iteratorSymbol] = function () { return this.entries(); };
+                Map.prototype._find = function (key, insert) {
+                    if (this._cacheKey !== key) {
+                        this._cacheIndex = this._keys.indexOf(this._cacheKey = key);
+                    }
+                    if (this._cacheIndex < 0 && insert) {
+                        this._cacheIndex = this._keys.length;
+                        this._keys.push(key);
+                        this._values.push(undefined);
+                    }
+                    return this._cacheIndex;
+                };
+                return Map;
+            }());
+            function getKey(key, _) {
+                return key;
+            }
+            function getValue(_, value) {
+                return value;
+            }
+            function getEntry(key, value) {
+                return [key, value];
+            }
+        }
+        // naive Set shim
+        function CreateSetPolyfill() {
+            return (function () {
+                function Set() {
+                    this._map = new _Map();
+                }
+                Object.defineProperty(Set.prototype, "size", {
+                    get: function () { return this._map.size; },
+                    enumerable: true,
+                    configurable: true
+                });
+                Set.prototype.has = function (value) { return this._map.has(value); };
+                Set.prototype.add = function (value) { return this._map.set(value, value), this; };
+                Set.prototype.delete = function (value) { return this._map.delete(value); };
+                Set.prototype.clear = function () { this._map.clear(); };
+                Set.prototype.keys = function () { return this._map.keys(); };
+                Set.prototype.values = function () { return this._map.values(); };
+                Set.prototype.entries = function () { return this._map.entries(); };
+                Set.prototype["@@iterator"] = function () { return this.keys(); };
+                Set.prototype[iteratorSymbol] = function () { return this.keys(); };
+                return Set;
+            }());
+        }
+        // naive WeakMap shim
+        function CreateWeakMapPolyfill() {
+            var UUID_SIZE = 16;
+            var keys = HashMap.create();
+            var rootKey = CreateUniqueKey();
+            return (function () {
+                function WeakMap() {
+                    this._key = CreateUniqueKey();
+                }
+                WeakMap.prototype.has = function (target) {
+                    var table = GetOrCreateWeakMapTable(target, /*create*/ false);
+                    return table !== undefined ? HashMap.has(table, this._key) : false;
+                };
+                WeakMap.prototype.get = function (target) {
+                    var table = GetOrCreateWeakMapTable(target, /*create*/ false);
+                    return table !== undefined ? HashMap.get(table, this._key) : undefined;
+                };
+                WeakMap.prototype.set = function (target, value) {
+                    var table = GetOrCreateWeakMapTable(target, /*create*/ true);
+                    table[this._key] = value;
+                    return this;
+                };
+                WeakMap.prototype.delete = function (target) {
+                    var table = GetOrCreateWeakMapTable(target, /*create*/ false);
+                    return table !== undefined ? delete table[this._key] : false;
+                };
+                WeakMap.prototype.clear = function () {
+                    // NOTE: not a real clear, just makes the previous data unreachable
+                    this._key = CreateUniqueKey();
+                };
+                return WeakMap;
+            }());
+            function CreateUniqueKey() {
+                var key;
+                do
+                    key = "@@WeakMap@@" + CreateUUID();
+                while (HashMap.has(keys, key));
+                keys[key] = true;
+                return key;
+            }
+            function GetOrCreateWeakMapTable(target, create) {
+                if (!hasOwn.call(target, rootKey)) {
+                    if (!create)
+                        return undefined;
+                    Object.defineProperty(target, rootKey, { value: HashMap.create() });
+                }
+                return target[rootKey];
+            }
+            function FillRandomBytes(buffer, size) {
+                for (var i = 0; i < size; ++i)
+                    buffer[i] = Math.random() * 0xff | 0;
+                return buffer;
+            }
+            function GenRandomBytes(size) {
+                if (typeof Uint8Array === "function") {
+                    if (typeof crypto !== "undefined")
+                        return crypto.getRandomValues(new Uint8Array(size));
+                    if (typeof msCrypto !== "undefined")
+                        return msCrypto.getRandomValues(new Uint8Array(size));
+                    return FillRandomBytes(new Uint8Array(size), size);
+                }
+                return FillRandomBytes(new Array(size), size);
+            }
+            function CreateUUID() {
+                var data = GenRandomBytes(UUID_SIZE);
+                // mark as random - RFC 4122 § 4.4
+                data[6] = data[6] & 0x4f | 0x40;
+                data[8] = data[8] & 0xbf | 0x80;
+                var result = "";
+                for (var offset = 0; offset < UUID_SIZE; ++offset) {
+                    var byte = data[offset];
+                    if (offset === 4 || offset === 6 || offset === 8)
+                        result += "-";
+                    if (byte < 16)
+                        result += "0";
+                    result += byte.toString(16).toLowerCase();
+                }
+                return result;
+            }
+        }
+        // uses a heuristic used by v8 and chakra to force an object into dictionary mode.
+        function MakeDictionary(obj) {
+            obj.__ = undefined;
+            delete obj.__;
+            return obj;
+        }
+    });
+})(Reflect || (Reflect = {}));
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"_process":1}],86:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17136,7 +13317,7 @@ var AsyncSubject = (function (_super) {
 }(Subject_1.Subject));
 exports.AsyncSubject = AsyncSubject;
 
-},{"./Subject":120,"./Subscription":123}],111:[function(require,module,exports){
+},{"./Subject":95,"./Subscription":98}],87:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17186,7 +13367,7 @@ var BehaviorSubject = (function (_super) {
 }(Subject_1.Subject));
 exports.BehaviorSubject = BehaviorSubject;
 
-},{"./Subject":120,"./util/ObjectUnsubscribedError":437}],112:[function(require,module,exports){
+},{"./Subject":95,"./util/ObjectUnsubscribedError":240}],88:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17223,7 +13404,7 @@ var InnerSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.InnerSubscriber = InnerSubscriber;
 
-},{"./Subscriber":122}],113:[function(require,module,exports){
+},{"./Subscriber":97}],89:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('./Observable');
 /**
@@ -17351,11 +13532,12 @@ var Notification = (function () {
 }());
 exports.Notification = Notification;
 
-},{"./Observable":114}],114:[function(require,module,exports){
+},{"./Observable":90}],90:[function(require,module,exports){
 "use strict";
 var root_1 = require('./util/root');
 var toSubscriber_1 = require('./util/toSubscriber');
 var observable_1 = require('./symbol/observable');
+var pipe_1 = require('./util/pipe');
 /**
  * A representation of any set of values over any amount of time. This is the most basic building block
  * of RxJS.
@@ -17510,7 +13692,7 @@ var Observable = (function () {
             operator.call(sink, this.source);
         }
         else {
-            sink.add(this.source ? this._subscribe(sink) : this._trySubscribe(sink));
+            sink.add(this.source || !sink.syncErrorThrowable ? this._subscribe(sink) : this._trySubscribe(sink));
         }
         if (sink.syncErrorThrowable) {
             sink.syncErrorThrowable = false;
@@ -17591,6 +13773,54 @@ var Observable = (function () {
     Observable.prototype[observable_1.observable] = function () {
         return this;
     };
+    /* tslint:enable:max-line-length */
+    /**
+     * Used to stitch together functional operators into a chain.
+     * @method pipe
+     * @return {Observable} the Observable result of all of the operators having
+     * been called in the order they were passed in.
+     *
+     * @example
+     *
+     * import { map, filter, scan } from 'rxjs/operators';
+     *
+     * Rx.Observable.interval(1000)
+     *   .pipe(
+     *     filter(x => x % 2 === 0),
+     *     map(x => x + x),
+     *     scan((acc, x) => acc + x)
+     *   )
+     *   .subscribe(x => console.log(x))
+     */
+    Observable.prototype.pipe = function () {
+        var operations = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            operations[_i - 0] = arguments[_i];
+        }
+        if (operations.length === 0) {
+            return this;
+        }
+        return pipe_1.pipeFromArray(operations)(this);
+    };
+    /* tslint:enable:max-line-length */
+    Observable.prototype.toPromise = function (PromiseCtor) {
+        var _this = this;
+        if (!PromiseCtor) {
+            if (root_1.root.Rx && root_1.root.Rx.config && root_1.root.Rx.config.Promise) {
+                PromiseCtor = root_1.root.Rx.config.Promise;
+            }
+            else if (root_1.root.Promise) {
+                PromiseCtor = root_1.root.Promise;
+            }
+        }
+        if (!PromiseCtor) {
+            throw new Error('no Promise impl found');
+        }
+        return new PromiseCtor(function (resolve, reject) {
+            var value;
+            _this.subscribe(function (x) { return value = x; }, function (err) { return reject(err); }, function () { return resolve(value); });
+        });
+    };
     // HACK: Since TypeScript inherits static properties too, we have to
     // fight against TypeScript here so Subject can have a different static create signature
     /**
@@ -17608,7 +13838,7 @@ var Observable = (function () {
 }());
 exports.Observable = Observable;
 
-},{"./symbol/observable":423,"./util/root":454,"./util/toSubscriber":456}],115:[function(require,module,exports){
+},{"./symbol/observable":233,"./util/pipe":256,"./util/root":257,"./util/toSubscriber":259}],91:[function(require,module,exports){
 "use strict";
 exports.empty = {
     closed: true,
@@ -17617,7 +13847,7 @@ exports.empty = {
     complete: function () { }
 };
 
-},{}],116:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17648,7 +13878,7 @@ var OuterSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.OuterSubscriber = OuterSubscriber;
 
-},{"./Subscriber":122}],117:[function(require,module,exports){
+},{"./Subscriber":97}],93:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17658,7 +13888,7 @@ var __extends = (this && this.__extends) || function (d, b) {
 var Subject_1 = require('./Subject');
 var queue_1 = require('./scheduler/queue');
 var Subscription_1 = require('./Subscription');
-var observeOn_1 = require('./operator/observeOn');
+var observeOn_1 = require('./operators/observeOn');
 var ObjectUnsubscribedError_1 = require('./util/ObjectUnsubscribedError');
 var SubjectSubscription_1 = require('./SubjectSubscription');
 /**
@@ -17751,237 +13981,7 @@ var ReplayEvent = (function () {
     return ReplayEvent;
 }());
 
-},{"./Subject":120,"./SubjectSubscription":121,"./Subscription":123,"./operator/observeOn":357,"./scheduler/queue":421,"./util/ObjectUnsubscribedError":437}],118:[function(require,module,exports){
-"use strict";
-/* tslint:disable:no-unused-variable */
-// Subject imported before Observable to bypass circular dependency issue since
-// Subject extends Observable and Observable references Subject in it's
-// definition
-var Subject_1 = require('./Subject');
-exports.Subject = Subject_1.Subject;
-exports.AnonymousSubject = Subject_1.AnonymousSubject;
-/* tslint:enable:no-unused-variable */
-var Observable_1 = require('./Observable');
-exports.Observable = Observable_1.Observable;
-// statics
-/* tslint:disable:no-use-before-declare */
-require('./add/observable/bindCallback');
-require('./add/observable/bindNodeCallback');
-require('./add/observable/combineLatest');
-require('./add/observable/concat');
-require('./add/observable/defer');
-require('./add/observable/empty');
-require('./add/observable/forkJoin');
-require('./add/observable/from');
-require('./add/observable/fromEvent');
-require('./add/observable/fromEventPattern');
-require('./add/observable/fromPromise');
-require('./add/observable/generate');
-require('./add/observable/if');
-require('./add/observable/interval');
-require('./add/observable/merge');
-require('./add/observable/race');
-require('./add/observable/never');
-require('./add/observable/of');
-require('./add/observable/onErrorResumeNext');
-require('./add/observable/pairs');
-require('./add/observable/range');
-require('./add/observable/using');
-require('./add/observable/throw');
-require('./add/observable/timer');
-require('./add/observable/zip');
-//dom
-require('./add/observable/dom/ajax');
-require('./add/observable/dom/webSocket');
-//operators
-require('./add/operator/buffer');
-require('./add/operator/bufferCount');
-require('./add/operator/bufferTime');
-require('./add/operator/bufferToggle');
-require('./add/operator/bufferWhen');
-require('./add/operator/catch');
-require('./add/operator/combineAll');
-require('./add/operator/combineLatest');
-require('./add/operator/concat');
-require('./add/operator/concatAll');
-require('./add/operator/concatMap');
-require('./add/operator/concatMapTo');
-require('./add/operator/count');
-require('./add/operator/dematerialize');
-require('./add/operator/debounce');
-require('./add/operator/debounceTime');
-require('./add/operator/defaultIfEmpty');
-require('./add/operator/delay');
-require('./add/operator/delayWhen');
-require('./add/operator/distinct');
-require('./add/operator/distinctUntilChanged');
-require('./add/operator/distinctUntilKeyChanged');
-require('./add/operator/do');
-require('./add/operator/exhaust');
-require('./add/operator/exhaustMap');
-require('./add/operator/expand');
-require('./add/operator/elementAt');
-require('./add/operator/filter');
-require('./add/operator/finally');
-require('./add/operator/find');
-require('./add/operator/findIndex');
-require('./add/operator/first');
-require('./add/operator/groupBy');
-require('./add/operator/ignoreElements');
-require('./add/operator/isEmpty');
-require('./add/operator/audit');
-require('./add/operator/auditTime');
-require('./add/operator/last');
-require('./add/operator/let');
-require('./add/operator/every');
-require('./add/operator/map');
-require('./add/operator/mapTo');
-require('./add/operator/materialize');
-require('./add/operator/max');
-require('./add/operator/merge');
-require('./add/operator/mergeAll');
-require('./add/operator/mergeMap');
-require('./add/operator/mergeMapTo');
-require('./add/operator/mergeScan');
-require('./add/operator/min');
-require('./add/operator/multicast');
-require('./add/operator/observeOn');
-require('./add/operator/onErrorResumeNext');
-require('./add/operator/pairwise');
-require('./add/operator/partition');
-require('./add/operator/pluck');
-require('./add/operator/publish');
-require('./add/operator/publishBehavior');
-require('./add/operator/publishReplay');
-require('./add/operator/publishLast');
-require('./add/operator/race');
-require('./add/operator/reduce');
-require('./add/operator/repeat');
-require('./add/operator/repeatWhen');
-require('./add/operator/retry');
-require('./add/operator/retryWhen');
-require('./add/operator/sample');
-require('./add/operator/sampleTime');
-require('./add/operator/scan');
-require('./add/operator/sequenceEqual');
-require('./add/operator/share');
-require('./add/operator/shareReplay');
-require('./add/operator/single');
-require('./add/operator/skip');
-require('./add/operator/skipLast');
-require('./add/operator/skipUntil');
-require('./add/operator/skipWhile');
-require('./add/operator/startWith');
-require('./add/operator/subscribeOn');
-require('./add/operator/switch');
-require('./add/operator/switchMap');
-require('./add/operator/switchMapTo');
-require('./add/operator/take');
-require('./add/operator/takeLast');
-require('./add/operator/takeUntil');
-require('./add/operator/takeWhile');
-require('./add/operator/throttle');
-require('./add/operator/throttleTime');
-require('./add/operator/timeInterval');
-require('./add/operator/timeout');
-require('./add/operator/timeoutWith');
-require('./add/operator/timestamp');
-require('./add/operator/toArray');
-require('./add/operator/toPromise');
-require('./add/operator/window');
-require('./add/operator/windowCount');
-require('./add/operator/windowTime');
-require('./add/operator/windowToggle');
-require('./add/operator/windowWhen');
-require('./add/operator/withLatestFrom');
-require('./add/operator/zip');
-require('./add/operator/zipAll');
-/* tslint:disable:no-unused-variable */
-var Subscription_1 = require('./Subscription');
-exports.Subscription = Subscription_1.Subscription;
-var Subscriber_1 = require('./Subscriber');
-exports.Subscriber = Subscriber_1.Subscriber;
-var AsyncSubject_1 = require('./AsyncSubject');
-exports.AsyncSubject = AsyncSubject_1.AsyncSubject;
-var ReplaySubject_1 = require('./ReplaySubject');
-exports.ReplaySubject = ReplaySubject_1.ReplaySubject;
-var BehaviorSubject_1 = require('./BehaviorSubject');
-exports.BehaviorSubject = BehaviorSubject_1.BehaviorSubject;
-var ConnectableObservable_1 = require('./observable/ConnectableObservable');
-exports.ConnectableObservable = ConnectableObservable_1.ConnectableObservable;
-var Notification_1 = require('./Notification');
-exports.Notification = Notification_1.Notification;
-var EmptyError_1 = require('./util/EmptyError');
-exports.EmptyError = EmptyError_1.EmptyError;
-var ArgumentOutOfRangeError_1 = require('./util/ArgumentOutOfRangeError');
-exports.ArgumentOutOfRangeError = ArgumentOutOfRangeError_1.ArgumentOutOfRangeError;
-var ObjectUnsubscribedError_1 = require('./util/ObjectUnsubscribedError');
-exports.ObjectUnsubscribedError = ObjectUnsubscribedError_1.ObjectUnsubscribedError;
-var TimeoutError_1 = require('./util/TimeoutError');
-exports.TimeoutError = TimeoutError_1.TimeoutError;
-var UnsubscriptionError_1 = require('./util/UnsubscriptionError');
-exports.UnsubscriptionError = UnsubscriptionError_1.UnsubscriptionError;
-var timeInterval_1 = require('./operator/timeInterval');
-exports.TimeInterval = timeInterval_1.TimeInterval;
-var timestamp_1 = require('./operator/timestamp');
-exports.Timestamp = timestamp_1.Timestamp;
-var TestScheduler_1 = require('./testing/TestScheduler');
-exports.TestScheduler = TestScheduler_1.TestScheduler;
-var VirtualTimeScheduler_1 = require('./scheduler/VirtualTimeScheduler');
-exports.VirtualTimeScheduler = VirtualTimeScheduler_1.VirtualTimeScheduler;
-var AjaxObservable_1 = require('./observable/dom/AjaxObservable');
-exports.AjaxResponse = AjaxObservable_1.AjaxResponse;
-exports.AjaxError = AjaxObservable_1.AjaxError;
-exports.AjaxTimeoutError = AjaxObservable_1.AjaxTimeoutError;
-var asap_1 = require('./scheduler/asap');
-var async_1 = require('./scheduler/async');
-var queue_1 = require('./scheduler/queue');
-var animationFrame_1 = require('./scheduler/animationFrame');
-var rxSubscriber_1 = require('./symbol/rxSubscriber');
-var iterator_1 = require('./symbol/iterator');
-var observable_1 = require('./symbol/observable');
-/* tslint:enable:no-unused-variable */
-/**
- * @typedef {Object} Rx.Scheduler
- * @property {Scheduler} queue Schedules on a queue in the current event frame
- * (trampoline scheduler). Use this for iteration operations.
- * @property {Scheduler} asap Schedules on the micro task queue, which uses the
- * fastest transport mechanism available, either Node.js' `process.nextTick()`
- * or Web Worker MessageChannel or setTimeout or others. Use this for
- * asynchronous conversions.
- * @property {Scheduler} async Schedules work with `setInterval`. Use this for
- * time-based operations.
- * @property {Scheduler} animationFrame Schedules work with `requestAnimationFrame`.
- * Use this for synchronizing with the platform's painting
- */
-var Scheduler = {
-    asap: asap_1.asap,
-    queue: queue_1.queue,
-    animationFrame: animationFrame_1.animationFrame,
-    async: async_1.async
-};
-exports.Scheduler = Scheduler;
-/**
- * @typedef {Object} Rx.Symbol
- * @property {Symbol|string} rxSubscriber A symbol to use as a property name to
- * retrieve an "Rx safe" Observer from an object. "Rx safety" can be defined as
- * an object that has all of the traits of an Rx Subscriber, including the
- * ability to add and remove subscriptions to the subscription chain and
- * guarantees involving event triggering (can't "next" after unsubscription,
- * etc).
- * @property {Symbol|string} observable A symbol to use as a property name to
- * retrieve an Observable as defined by the [ECMAScript "Observable" spec](https://github.com/zenparsing/es-observable).
- * @property {Symbol|string} iterator The ES6 symbol to use as a property name
- * to retrieve an iterator from an object.
- */
-var Symbol = {
-    rxSubscriber: rxSubscriber_1.rxSubscriber,
-    observable: observable_1.observable,
-    iterator: iterator_1.iterator
-};
-exports.Symbol = Symbol;
-
-},{"./AsyncSubject":110,"./BehaviorSubject":111,"./Notification":113,"./Observable":114,"./ReplaySubject":117,"./Subject":120,"./Subscriber":122,"./Subscription":123,"./add/observable/bindCallback":124,"./add/observable/bindNodeCallback":125,"./add/observable/combineLatest":126,"./add/observable/concat":127,"./add/observable/defer":128,"./add/observable/dom/ajax":129,"./add/observable/dom/webSocket":130,"./add/observable/empty":131,"./add/observable/forkJoin":132,"./add/observable/from":133,"./add/observable/fromEvent":134,"./add/observable/fromEventPattern":135,"./add/observable/fromPromise":136,"./add/observable/generate":137,"./add/observable/if":138,"./add/observable/interval":139,"./add/observable/merge":140,"./add/observable/never":141,"./add/observable/of":142,"./add/observable/onErrorResumeNext":143,"./add/observable/pairs":144,"./add/observable/race":145,"./add/observable/range":146,"./add/observable/throw":147,"./add/observable/timer":148,"./add/observable/using":149,"./add/observable/zip":150,"./add/operator/audit":151,"./add/operator/auditTime":152,"./add/operator/buffer":153,"./add/operator/bufferCount":154,"./add/operator/bufferTime":155,"./add/operator/bufferToggle":156,"./add/operator/bufferWhen":157,"./add/operator/catch":158,"./add/operator/combineAll":159,"./add/operator/combineLatest":160,"./add/operator/concat":161,"./add/operator/concatAll":162,"./add/operator/concatMap":163,"./add/operator/concatMapTo":164,"./add/operator/count":165,"./add/operator/debounce":166,"./add/operator/debounceTime":167,"./add/operator/defaultIfEmpty":168,"./add/operator/delay":169,"./add/operator/delayWhen":170,"./add/operator/dematerialize":171,"./add/operator/distinct":172,"./add/operator/distinctUntilChanged":173,"./add/operator/distinctUntilKeyChanged":174,"./add/operator/do":175,"./add/operator/elementAt":176,"./add/operator/every":177,"./add/operator/exhaust":178,"./add/operator/exhaustMap":179,"./add/operator/expand":180,"./add/operator/filter":181,"./add/operator/finally":182,"./add/operator/find":183,"./add/operator/findIndex":184,"./add/operator/first":185,"./add/operator/groupBy":186,"./add/operator/ignoreElements":187,"./add/operator/isEmpty":188,"./add/operator/last":189,"./add/operator/let":190,"./add/operator/map":191,"./add/operator/mapTo":192,"./add/operator/materialize":193,"./add/operator/max":194,"./add/operator/merge":195,"./add/operator/mergeAll":196,"./add/operator/mergeMap":197,"./add/operator/mergeMapTo":198,"./add/operator/mergeScan":199,"./add/operator/min":200,"./add/operator/multicast":201,"./add/operator/observeOn":202,"./add/operator/onErrorResumeNext":203,"./add/operator/pairwise":204,"./add/operator/partition":205,"./add/operator/pluck":206,"./add/operator/publish":207,"./add/operator/publishBehavior":208,"./add/operator/publishLast":209,"./add/operator/publishReplay":210,"./add/operator/race":211,"./add/operator/reduce":212,"./add/operator/repeat":213,"./add/operator/repeatWhen":214,"./add/operator/retry":215,"./add/operator/retryWhen":216,"./add/operator/sample":217,"./add/operator/sampleTime":218,"./add/operator/scan":219,"./add/operator/sequenceEqual":220,"./add/operator/share":221,"./add/operator/shareReplay":222,"./add/operator/single":223,"./add/operator/skip":224,"./add/operator/skipLast":225,"./add/operator/skipUntil":226,"./add/operator/skipWhile":227,"./add/operator/startWith":228,"./add/operator/subscribeOn":229,"./add/operator/switch":230,"./add/operator/switchMap":231,"./add/operator/switchMapTo":232,"./add/operator/take":233,"./add/operator/takeLast":234,"./add/operator/takeUntil":235,"./add/operator/takeWhile":236,"./add/operator/throttle":237,"./add/operator/throttleTime":238,"./add/operator/timeInterval":239,"./add/operator/timeout":240,"./add/operator/timeoutWith":241,"./add/operator/timestamp":242,"./add/operator/toArray":243,"./add/operator/toPromise":244,"./add/operator/window":245,"./add/operator/windowCount":246,"./add/operator/windowTime":247,"./add/operator/windowToggle":248,"./add/operator/windowWhen":249,"./add/operator/withLatestFrom":250,"./add/operator/zip":251,"./add/operator/zipAll":252,"./observable/ConnectableObservable":257,"./observable/dom/AjaxObservable":282,"./operator/timeInterval":394,"./operator/timestamp":397,"./scheduler/VirtualTimeScheduler":417,"./scheduler/animationFrame":418,"./scheduler/asap":419,"./scheduler/async":420,"./scheduler/queue":421,"./symbol/iterator":422,"./symbol/observable":423,"./symbol/rxSubscriber":424,"./testing/TestScheduler":429,"./util/ArgumentOutOfRangeError":431,"./util/EmptyError":432,"./util/ObjectUnsubscribedError":437,"./util/TimeoutError":439,"./util/UnsubscriptionError":440}],119:[function(require,module,exports){
+},{"./Subject":95,"./SubjectSubscription":96,"./Subscription":98,"./operators/observeOn":174,"./scheduler/queue":231,"./util/ObjectUnsubscribedError":240}],94:[function(require,module,exports){
 "use strict";
 /**
  * An execution context and a data structure to order tasks and schedule their
@@ -18031,7 +14031,7 @@ var Scheduler = (function () {
 }());
 exports.Scheduler = Scheduler;
 
-},{}],120:[function(require,module,exports){
+},{}],95:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -18200,7 +14200,7 @@ var AnonymousSubject = (function (_super) {
 }(Subject));
 exports.AnonymousSubject = AnonymousSubject;
 
-},{"./Observable":114,"./SubjectSubscription":121,"./Subscriber":122,"./Subscription":123,"./symbol/rxSubscriber":424,"./util/ObjectUnsubscribedError":437}],121:[function(require,module,exports){
+},{"./Observable":90,"./SubjectSubscription":96,"./Subscriber":97,"./Subscription":98,"./symbol/rxSubscriber":234,"./util/ObjectUnsubscribedError":240}],96:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -18241,7 +14241,7 @@ var SubjectSubscription = (function (_super) {
 }(Subscription_1.Subscription));
 exports.SubjectSubscription = SubjectSubscription;
 
-},{"./Subscription":123}],122:[function(require,module,exports){
+},{"./Subscription":98}],97:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -18289,6 +14289,7 @@ var Subscriber = (function (_super) {
                 }
                 if (typeof destinationOrNext === 'object') {
                     if (destinationOrNext instanceof Subscriber) {
+                        this.syncErrorThrowable = destinationOrNext.syncErrorThrowable;
                         this.destination = destinationOrNext;
                         this.destination.add(this);
                     }
@@ -18506,7 +14507,7 @@ var SafeSubscriber = (function (_super) {
     return SafeSubscriber;
 }(Subscriber));
 
-},{"./Observer":115,"./Subscription":123,"./symbol/rxSubscriber":424,"./util/isFunction":447}],123:[function(require,module,exports){
+},{"./Observer":91,"./Subscription":98,"./symbol/rxSubscriber":234,"./util/isFunction":249}],98:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('./util/isArray');
 var isObject_1 = require('./util/isObject');
@@ -18700,788 +14701,26 @@ function flattenUnsubscriptionErrors(errors) {
     return errors.reduce(function (errs, err) { return errs.concat((err instanceof UnsubscriptionError_1.UnsubscriptionError) ? err.errors : err); }, []);
 }
 
-},{"./util/UnsubscriptionError":440,"./util/errorObject":443,"./util/isArray":444,"./util/isFunction":447,"./util/isObject":449,"./util/tryCatch":457}],124:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var bindCallback_1 = require('../../observable/bindCallback');
-Observable_1.Observable.bindCallback = bindCallback_1.bindCallback;
-
-},{"../../Observable":114,"../../observable/bindCallback":277}],125:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var bindNodeCallback_1 = require('../../observable/bindNodeCallback');
-Observable_1.Observable.bindNodeCallback = bindNodeCallback_1.bindNodeCallback;
-
-},{"../../Observable":114,"../../observable/bindNodeCallback":278}],126:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var combineLatest_1 = require('../../observable/combineLatest');
-Observable_1.Observable.combineLatest = combineLatest_1.combineLatest;
-
-},{"../../Observable":114,"../../observable/combineLatest":279}],127:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var concat_1 = require('../../observable/concat');
-Observable_1.Observable.concat = concat_1.concat;
-
-},{"../../Observable":114,"../../observable/concat":280}],128:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var defer_1 = require('../../observable/defer');
-Observable_1.Observable.defer = defer_1.defer;
-
-},{"../../Observable":114,"../../observable/defer":281}],129:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../../Observable');
-var ajax_1 = require('../../../observable/dom/ajax');
-Observable_1.Observable.ajax = ajax_1.ajax;
-
-},{"../../../Observable":114,"../../../observable/dom/ajax":284}],130:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../../Observable');
-var webSocket_1 = require('../../../observable/dom/webSocket');
-Observable_1.Observable.webSocket = webSocket_1.webSocket;
-
-},{"../../../Observable":114,"../../../observable/dom/webSocket":285}],131:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var empty_1 = require('../../observable/empty');
-Observable_1.Observable.empty = empty_1.empty;
-
-},{"../../Observable":114,"../../observable/empty":286}],132:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var forkJoin_1 = require('../../observable/forkJoin');
-Observable_1.Observable.forkJoin = forkJoin_1.forkJoin;
-
-},{"../../Observable":114,"../../observable/forkJoin":287}],133:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var from_1 = require('../../observable/from');
-Observable_1.Observable.from = from_1.from;
-
-},{"../../Observable":114,"../../observable/from":288}],134:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var fromEvent_1 = require('../../observable/fromEvent');
-Observable_1.Observable.fromEvent = fromEvent_1.fromEvent;
-
-},{"../../Observable":114,"../../observable/fromEvent":289}],135:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var fromEventPattern_1 = require('../../observable/fromEventPattern');
-Observable_1.Observable.fromEventPattern = fromEventPattern_1.fromEventPattern;
-
-},{"../../Observable":114,"../../observable/fromEventPattern":290}],136:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var fromPromise_1 = require('../../observable/fromPromise');
-Observable_1.Observable.fromPromise = fromPromise_1.fromPromise;
-
-},{"../../Observable":114,"../../observable/fromPromise":291}],137:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var generate_1 = require('../../observable/generate');
-Observable_1.Observable.generate = generate_1.generate;
-
-},{"../../Observable":114,"../../observable/generate":292}],138:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var if_1 = require('../../observable/if');
-Observable_1.Observable.if = if_1._if;
-
-},{"../../Observable":114,"../../observable/if":293}],139:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var interval_1 = require('../../observable/interval');
-Observable_1.Observable.interval = interval_1.interval;
-
-},{"../../Observable":114,"../../observable/interval":294}],140:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var merge_1 = require('../../observable/merge');
-Observable_1.Observable.merge = merge_1.merge;
-
-},{"../../Observable":114,"../../observable/merge":295}],141:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var never_1 = require('../../observable/never');
-Observable_1.Observable.never = never_1.never;
-
-},{"../../Observable":114,"../../observable/never":296}],142:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var of_1 = require('../../observable/of');
-Observable_1.Observable.of = of_1.of;
-
-},{"../../Observable":114,"../../observable/of":297}],143:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var onErrorResumeNext_1 = require('../../observable/onErrorResumeNext');
-Observable_1.Observable.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNext;
-
-},{"../../Observable":114,"../../observable/onErrorResumeNext":298}],144:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var pairs_1 = require('../../observable/pairs');
-Observable_1.Observable.pairs = pairs_1.pairs;
-
-},{"../../Observable":114,"../../observable/pairs":299}],145:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var race_1 = require('../../observable/race');
-Observable_1.Observable.race = race_1.race;
-
-},{"../../Observable":114,"../../observable/race":300}],146:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var range_1 = require('../../observable/range');
-Observable_1.Observable.range = range_1.range;
-
-},{"../../Observable":114,"../../observable/range":301}],147:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var throw_1 = require('../../observable/throw');
-Observable_1.Observable.throw = throw_1._throw;
-
-},{"../../Observable":114,"../../observable/throw":302}],148:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var timer_1 = require('../../observable/timer');
-Observable_1.Observable.timer = timer_1.timer;
-
-},{"../../Observable":114,"../../observable/timer":303}],149:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var using_1 = require('../../observable/using');
-Observable_1.Observable.using = using_1.using;
-
-},{"../../Observable":114,"../../observable/using":304}],150:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var zip_1 = require('../../observable/zip');
-Observable_1.Observable.zip = zip_1.zip;
-
-},{"../../Observable":114,"../../observable/zip":305}],151:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var audit_1 = require('../../operator/audit');
-Observable_1.Observable.prototype.audit = audit_1.audit;
-
-},{"../../Observable":114,"../../operator/audit":306}],152:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var auditTime_1 = require('../../operator/auditTime');
-Observable_1.Observable.prototype.auditTime = auditTime_1.auditTime;
-
-},{"../../Observable":114,"../../operator/auditTime":307}],153:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var buffer_1 = require('../../operator/buffer');
-Observable_1.Observable.prototype.buffer = buffer_1.buffer;
-
-},{"../../Observable":114,"../../operator/buffer":308}],154:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var bufferCount_1 = require('../../operator/bufferCount');
-Observable_1.Observable.prototype.bufferCount = bufferCount_1.bufferCount;
-
-},{"../../Observable":114,"../../operator/bufferCount":309}],155:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var bufferTime_1 = require('../../operator/bufferTime');
-Observable_1.Observable.prototype.bufferTime = bufferTime_1.bufferTime;
-
-},{"../../Observable":114,"../../operator/bufferTime":310}],156:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var bufferToggle_1 = require('../../operator/bufferToggle');
-Observable_1.Observable.prototype.bufferToggle = bufferToggle_1.bufferToggle;
-
-},{"../../Observable":114,"../../operator/bufferToggle":311}],157:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var bufferWhen_1 = require('../../operator/bufferWhen');
-Observable_1.Observable.prototype.bufferWhen = bufferWhen_1.bufferWhen;
-
-},{"../../Observable":114,"../../operator/bufferWhen":312}],158:[function(require,module,exports){
+},{"./util/UnsubscriptionError":243,"./util/errorObject":244,"./util/isArray":246,"./util/isFunction":249,"./util/isObject":251,"./util/tryCatch":260}],99:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var catch_1 = require('../../operator/catch');
 Observable_1.Observable.prototype.catch = catch_1._catch;
 Observable_1.Observable.prototype._catch = catch_1._catch;
 
-},{"../../Observable":114,"../../operator/catch":313}],159:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var combineAll_1 = require('../../operator/combineAll');
-Observable_1.Observable.prototype.combineAll = combineAll_1.combineAll;
-
-},{"../../Observable":114,"../../operator/combineAll":314}],160:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var combineLatest_1 = require('../../operator/combineLatest');
-Observable_1.Observable.prototype.combineLatest = combineLatest_1.combineLatest;
-
-},{"../../Observable":114,"../../operator/combineLatest":315}],161:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var concat_1 = require('../../operator/concat');
-Observable_1.Observable.prototype.concat = concat_1.concat;
-
-},{"../../Observable":114,"../../operator/concat":316}],162:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var concatAll_1 = require('../../operator/concatAll');
-Observable_1.Observable.prototype.concatAll = concatAll_1.concatAll;
-
-},{"../../Observable":114,"../../operator/concatAll":317}],163:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var concatMap_1 = require('../../operator/concatMap');
-Observable_1.Observable.prototype.concatMap = concatMap_1.concatMap;
-
-},{"../../Observable":114,"../../operator/concatMap":318}],164:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var concatMapTo_1 = require('../../operator/concatMapTo');
-Observable_1.Observable.prototype.concatMapTo = concatMapTo_1.concatMapTo;
-
-},{"../../Observable":114,"../../operator/concatMapTo":319}],165:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var count_1 = require('../../operator/count');
-Observable_1.Observable.prototype.count = count_1.count;
-
-},{"../../Observable":114,"../../operator/count":320}],166:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var debounce_1 = require('../../operator/debounce');
-Observable_1.Observable.prototype.debounce = debounce_1.debounce;
-
-},{"../../Observable":114,"../../operator/debounce":321}],167:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var debounceTime_1 = require('../../operator/debounceTime');
-Observable_1.Observable.prototype.debounceTime = debounceTime_1.debounceTime;
-
-},{"../../Observable":114,"../../operator/debounceTime":322}],168:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var defaultIfEmpty_1 = require('../../operator/defaultIfEmpty');
-Observable_1.Observable.prototype.defaultIfEmpty = defaultIfEmpty_1.defaultIfEmpty;
-
-},{"../../Observable":114,"../../operator/defaultIfEmpty":323}],169:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var delay_1 = require('../../operator/delay');
-Observable_1.Observable.prototype.delay = delay_1.delay;
-
-},{"../../Observable":114,"../../operator/delay":324}],170:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var delayWhen_1 = require('../../operator/delayWhen');
-Observable_1.Observable.prototype.delayWhen = delayWhen_1.delayWhen;
-
-},{"../../Observable":114,"../../operator/delayWhen":325}],171:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var dematerialize_1 = require('../../operator/dematerialize');
-Observable_1.Observable.prototype.dematerialize = dematerialize_1.dematerialize;
-
-},{"../../Observable":114,"../../operator/dematerialize":326}],172:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var distinct_1 = require('../../operator/distinct');
-Observable_1.Observable.prototype.distinct = distinct_1.distinct;
-
-},{"../../Observable":114,"../../operator/distinct":327}],173:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var distinctUntilChanged_1 = require('../../operator/distinctUntilChanged');
-Observable_1.Observable.prototype.distinctUntilChanged = distinctUntilChanged_1.distinctUntilChanged;
-
-},{"../../Observable":114,"../../operator/distinctUntilChanged":328}],174:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var distinctUntilKeyChanged_1 = require('../../operator/distinctUntilKeyChanged');
-Observable_1.Observable.prototype.distinctUntilKeyChanged = distinctUntilKeyChanged_1.distinctUntilKeyChanged;
-
-},{"../../Observable":114,"../../operator/distinctUntilKeyChanged":329}],175:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var do_1 = require('../../operator/do');
-Observable_1.Observable.prototype.do = do_1._do;
-Observable_1.Observable.prototype._do = do_1._do;
-
-},{"../../Observable":114,"../../operator/do":330}],176:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var elementAt_1 = require('../../operator/elementAt');
-Observable_1.Observable.prototype.elementAt = elementAt_1.elementAt;
-
-},{"../../Observable":114,"../../operator/elementAt":331}],177:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var every_1 = require('../../operator/every');
-Observable_1.Observable.prototype.every = every_1.every;
-
-},{"../../Observable":114,"../../operator/every":332}],178:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var exhaust_1 = require('../../operator/exhaust');
-Observable_1.Observable.prototype.exhaust = exhaust_1.exhaust;
-
-},{"../../Observable":114,"../../operator/exhaust":333}],179:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var exhaustMap_1 = require('../../operator/exhaustMap');
-Observable_1.Observable.prototype.exhaustMap = exhaustMap_1.exhaustMap;
-
-},{"../../Observable":114,"../../operator/exhaustMap":334}],180:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var expand_1 = require('../../operator/expand');
-Observable_1.Observable.prototype.expand = expand_1.expand;
-
-},{"../../Observable":114,"../../operator/expand":335}],181:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var filter_1 = require('../../operator/filter');
-Observable_1.Observable.prototype.filter = filter_1.filter;
-
-},{"../../Observable":114,"../../operator/filter":336}],182:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var finally_1 = require('../../operator/finally');
-Observable_1.Observable.prototype.finally = finally_1._finally;
-Observable_1.Observable.prototype._finally = finally_1._finally;
-
-},{"../../Observable":114,"../../operator/finally":337}],183:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var find_1 = require('../../operator/find');
-Observable_1.Observable.prototype.find = find_1.find;
-
-},{"../../Observable":114,"../../operator/find":338}],184:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var findIndex_1 = require('../../operator/findIndex');
-Observable_1.Observable.prototype.findIndex = findIndex_1.findIndex;
-
-},{"../../Observable":114,"../../operator/findIndex":339}],185:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var first_1 = require('../../operator/first');
-Observable_1.Observable.prototype.first = first_1.first;
-
-},{"../../Observable":114,"../../operator/first":340}],186:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var groupBy_1 = require('../../operator/groupBy');
-Observable_1.Observable.prototype.groupBy = groupBy_1.groupBy;
-
-},{"../../Observable":114,"../../operator/groupBy":341}],187:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var ignoreElements_1 = require('../../operator/ignoreElements');
-Observable_1.Observable.prototype.ignoreElements = ignoreElements_1.ignoreElements;
-
-},{"../../Observable":114,"../../operator/ignoreElements":342}],188:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var isEmpty_1 = require('../../operator/isEmpty');
-Observable_1.Observable.prototype.isEmpty = isEmpty_1.isEmpty;
-
-},{"../../Observable":114,"../../operator/isEmpty":343}],189:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var last_1 = require('../../operator/last');
-Observable_1.Observable.prototype.last = last_1.last;
-
-},{"../../Observable":114,"../../operator/last":344}],190:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var let_1 = require('../../operator/let');
-Observable_1.Observable.prototype.let = let_1.letProto;
-Observable_1.Observable.prototype.letBind = let_1.letProto;
-
-},{"../../Observable":114,"../../operator/let":345}],191:[function(require,module,exports){
+},{"../../Observable":90,"../../operator/catch":121}],100:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var map_1 = require('../../operator/map');
 Observable_1.Observable.prototype.map = map_1.map;
 
-},{"../../Observable":114,"../../operator/map":346}],192:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var mapTo_1 = require('../../operator/mapTo');
-Observable_1.Observable.prototype.mapTo = mapTo_1.mapTo;
-
-},{"../../Observable":114,"../../operator/mapTo":347}],193:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var materialize_1 = require('../../operator/materialize');
-Observable_1.Observable.prototype.materialize = materialize_1.materialize;
-
-},{"../../Observable":114,"../../operator/materialize":348}],194:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var max_1 = require('../../operator/max');
-Observable_1.Observable.prototype.max = max_1.max;
-
-},{"../../Observable":114,"../../operator/max":349}],195:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var merge_1 = require('../../operator/merge');
-Observable_1.Observable.prototype.merge = merge_1.merge;
-
-},{"../../Observable":114,"../../operator/merge":350}],196:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var mergeAll_1 = require('../../operator/mergeAll');
-Observable_1.Observable.prototype.mergeAll = mergeAll_1.mergeAll;
-
-},{"../../Observable":114,"../../operator/mergeAll":351}],197:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var mergeMap_1 = require('../../operator/mergeMap');
-Observable_1.Observable.prototype.mergeMap = mergeMap_1.mergeMap;
-Observable_1.Observable.prototype.flatMap = mergeMap_1.mergeMap;
-
-},{"../../Observable":114,"../../operator/mergeMap":352}],198:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var mergeMapTo_1 = require('../../operator/mergeMapTo');
-Observable_1.Observable.prototype.flatMapTo = mergeMapTo_1.mergeMapTo;
-Observable_1.Observable.prototype.mergeMapTo = mergeMapTo_1.mergeMapTo;
-
-},{"../../Observable":114,"../../operator/mergeMapTo":353}],199:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var mergeScan_1 = require('../../operator/mergeScan');
-Observable_1.Observable.prototype.mergeScan = mergeScan_1.mergeScan;
-
-},{"../../Observable":114,"../../operator/mergeScan":354}],200:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var min_1 = require('../../operator/min');
-Observable_1.Observable.prototype.min = min_1.min;
-
-},{"../../Observable":114,"../../operator/min":355}],201:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var multicast_1 = require('../../operator/multicast');
-Observable_1.Observable.prototype.multicast = multicast_1.multicast;
-
-},{"../../Observable":114,"../../operator/multicast":356}],202:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var observeOn_1 = require('../../operator/observeOn');
-Observable_1.Observable.prototype.observeOn = observeOn_1.observeOn;
-
-},{"../../Observable":114,"../../operator/observeOn":357}],203:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var onErrorResumeNext_1 = require('../../operator/onErrorResumeNext');
-Observable_1.Observable.prototype.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNext;
-
-},{"../../Observable":114,"../../operator/onErrorResumeNext":358}],204:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var pairwise_1 = require('../../operator/pairwise');
-Observable_1.Observable.prototype.pairwise = pairwise_1.pairwise;
-
-},{"../../Observable":114,"../../operator/pairwise":359}],205:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var partition_1 = require('../../operator/partition');
-Observable_1.Observable.prototype.partition = partition_1.partition;
-
-},{"../../Observable":114,"../../operator/partition":360}],206:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var pluck_1 = require('../../operator/pluck');
-Observable_1.Observable.prototype.pluck = pluck_1.pluck;
-
-},{"../../Observable":114,"../../operator/pluck":361}],207:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var publish_1 = require('../../operator/publish');
-Observable_1.Observable.prototype.publish = publish_1.publish;
-
-},{"../../Observable":114,"../../operator/publish":362}],208:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var publishBehavior_1 = require('../../operator/publishBehavior');
-Observable_1.Observable.prototype.publishBehavior = publishBehavior_1.publishBehavior;
-
-},{"../../Observable":114,"../../operator/publishBehavior":363}],209:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var publishLast_1 = require('../../operator/publishLast');
-Observable_1.Observable.prototype.publishLast = publishLast_1.publishLast;
-
-},{"../../Observable":114,"../../operator/publishLast":364}],210:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var publishReplay_1 = require('../../operator/publishReplay');
-Observable_1.Observable.prototype.publishReplay = publishReplay_1.publishReplay;
-
-},{"../../Observable":114,"../../operator/publishReplay":365}],211:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var race_1 = require('../../operator/race');
-Observable_1.Observable.prototype.race = race_1.race;
-
-},{"../../Observable":114,"../../operator/race":366}],212:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var reduce_1 = require('../../operator/reduce');
-Observable_1.Observable.prototype.reduce = reduce_1.reduce;
-
-},{"../../Observable":114,"../../operator/reduce":367}],213:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var repeat_1 = require('../../operator/repeat');
-Observable_1.Observable.prototype.repeat = repeat_1.repeat;
-
-},{"../../Observable":114,"../../operator/repeat":368}],214:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var repeatWhen_1 = require('../../operator/repeatWhen');
-Observable_1.Observable.prototype.repeatWhen = repeatWhen_1.repeatWhen;
-
-},{"../../Observable":114,"../../operator/repeatWhen":369}],215:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var retry_1 = require('../../operator/retry');
-Observable_1.Observable.prototype.retry = retry_1.retry;
-
-},{"../../Observable":114,"../../operator/retry":370}],216:[function(require,module,exports){
+},{"../../Observable":90,"../../operator/map":122}],101:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var retryWhen_1 = require('../../operator/retryWhen');
 Observable_1.Observable.prototype.retryWhen = retryWhen_1.retryWhen;
 
-},{"../../Observable":114,"../../operator/retryWhen":371}],217:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var sample_1 = require('../../operator/sample');
-Observable_1.Observable.prototype.sample = sample_1.sample;
-
-},{"../../Observable":114,"../../operator/sample":372}],218:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var sampleTime_1 = require('../../operator/sampleTime');
-Observable_1.Observable.prototype.sampleTime = sampleTime_1.sampleTime;
-
-},{"../../Observable":114,"../../operator/sampleTime":373}],219:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var scan_1 = require('../../operator/scan');
-Observable_1.Observable.prototype.scan = scan_1.scan;
-
-},{"../../Observable":114,"../../operator/scan":374}],220:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var sequenceEqual_1 = require('../../operator/sequenceEqual');
-Observable_1.Observable.prototype.sequenceEqual = sequenceEqual_1.sequenceEqual;
-
-},{"../../Observable":114,"../../operator/sequenceEqual":375}],221:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var share_1 = require('../../operator/share');
-Observable_1.Observable.prototype.share = share_1.share;
-
-},{"../../Observable":114,"../../operator/share":376}],222:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var shareReplay_1 = require('../../operator/shareReplay');
-Observable_1.Observable.prototype.shareReplay = shareReplay_1.shareReplay;
-
-},{"../../Observable":114,"../../operator/shareReplay":377}],223:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var single_1 = require('../../operator/single');
-Observable_1.Observable.prototype.single = single_1.single;
-
-},{"../../Observable":114,"../../operator/single":378}],224:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var skip_1 = require('../../operator/skip');
-Observable_1.Observable.prototype.skip = skip_1.skip;
-
-},{"../../Observable":114,"../../operator/skip":379}],225:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var skipLast_1 = require('../../operator/skipLast');
-Observable_1.Observable.prototype.skipLast = skipLast_1.skipLast;
-
-},{"../../Observable":114,"../../operator/skipLast":380}],226:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var skipUntil_1 = require('../../operator/skipUntil');
-Observable_1.Observable.prototype.skipUntil = skipUntil_1.skipUntil;
-
-},{"../../Observable":114,"../../operator/skipUntil":381}],227:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var skipWhile_1 = require('../../operator/skipWhile');
-Observable_1.Observable.prototype.skipWhile = skipWhile_1.skipWhile;
-
-},{"../../Observable":114,"../../operator/skipWhile":382}],228:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var startWith_1 = require('../../operator/startWith');
-Observable_1.Observable.prototype.startWith = startWith_1.startWith;
-
-},{"../../Observable":114,"../../operator/startWith":383}],229:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var subscribeOn_1 = require('../../operator/subscribeOn');
-Observable_1.Observable.prototype.subscribeOn = subscribeOn_1.subscribeOn;
-
-},{"../../Observable":114,"../../operator/subscribeOn":384}],230:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var switch_1 = require('../../operator/switch');
-Observable_1.Observable.prototype.switch = switch_1._switch;
-Observable_1.Observable.prototype._switch = switch_1._switch;
-
-},{"../../Observable":114,"../../operator/switch":385}],231:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var switchMap_1 = require('../../operator/switchMap');
-Observable_1.Observable.prototype.switchMap = switchMap_1.switchMap;
-
-},{"../../Observable":114,"../../operator/switchMap":386}],232:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var switchMapTo_1 = require('../../operator/switchMapTo');
-Observable_1.Observable.prototype.switchMapTo = switchMapTo_1.switchMapTo;
-
-},{"../../Observable":114,"../../operator/switchMapTo":387}],233:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var take_1 = require('../../operator/take');
-Observable_1.Observable.prototype.take = take_1.take;
-
-},{"../../Observable":114,"../../operator/take":388}],234:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var takeLast_1 = require('../../operator/takeLast');
-Observable_1.Observable.prototype.takeLast = takeLast_1.takeLast;
-
-},{"../../Observable":114,"../../operator/takeLast":389}],235:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var takeUntil_1 = require('../../operator/takeUntil');
-Observable_1.Observable.prototype.takeUntil = takeUntil_1.takeUntil;
-
-},{"../../Observable":114,"../../operator/takeUntil":390}],236:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var takeWhile_1 = require('../../operator/takeWhile');
-Observable_1.Observable.prototype.takeWhile = takeWhile_1.takeWhile;
-
-},{"../../Observable":114,"../../operator/takeWhile":391}],237:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var throttle_1 = require('../../operator/throttle');
-Observable_1.Observable.prototype.throttle = throttle_1.throttle;
-
-},{"../../Observable":114,"../../operator/throttle":392}],238:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var throttleTime_1 = require('../../operator/throttleTime');
-Observable_1.Observable.prototype.throttleTime = throttleTime_1.throttleTime;
-
-},{"../../Observable":114,"../../operator/throttleTime":393}],239:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var timeInterval_1 = require('../../operator/timeInterval');
-Observable_1.Observable.prototype.timeInterval = timeInterval_1.timeInterval;
-
-},{"../../Observable":114,"../../operator/timeInterval":394}],240:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var timeout_1 = require('../../operator/timeout');
-Observable_1.Observable.prototype.timeout = timeout_1.timeout;
-
-},{"../../Observable":114,"../../operator/timeout":395}],241:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var timeoutWith_1 = require('../../operator/timeoutWith');
-Observable_1.Observable.prototype.timeoutWith = timeoutWith_1.timeoutWith;
-
-},{"../../Observable":114,"../../operator/timeoutWith":396}],242:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var timestamp_1 = require('../../operator/timestamp');
-Observable_1.Observable.prototype.timestamp = timestamp_1.timestamp;
-
-},{"../../Observable":114,"../../operator/timestamp":397}],243:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var toArray_1 = require('../../operator/toArray');
-Observable_1.Observable.prototype.toArray = toArray_1.toArray;
-
-},{"../../Observable":114,"../../operator/toArray":398}],244:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var toPromise_1 = require('../../operator/toPromise');
-Observable_1.Observable.prototype.toPromise = toPromise_1.toPromise;
-
-},{"../../Observable":114,"../../operator/toPromise":399}],245:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var window_1 = require('../../operator/window');
-Observable_1.Observable.prototype.window = window_1.window;
-
-},{"../../Observable":114,"../../operator/window":400}],246:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var windowCount_1 = require('../../operator/windowCount');
-Observable_1.Observable.prototype.windowCount = windowCount_1.windowCount;
-
-},{"../../Observable":114,"../../operator/windowCount":401}],247:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var windowTime_1 = require('../../operator/windowTime');
-Observable_1.Observable.prototype.windowTime = windowTime_1.windowTime;
-
-},{"../../Observable":114,"../../operator/windowTime":402}],248:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var windowToggle_1 = require('../../operator/windowToggle');
-Observable_1.Observable.prototype.windowToggle = windowToggle_1.windowToggle;
-
-},{"../../Observable":114,"../../operator/windowToggle":403}],249:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var windowWhen_1 = require('../../operator/windowWhen');
-Observable_1.Observable.prototype.windowWhen = windowWhen_1.windowWhen;
-
-},{"../../Observable":114,"../../operator/windowWhen":404}],250:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var withLatestFrom_1 = require('../../operator/withLatestFrom');
-Observable_1.Observable.prototype.withLatestFrom = withLatestFrom_1.withLatestFrom;
-
-},{"../../Observable":114,"../../operator/withLatestFrom":405}],251:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var zip_1 = require('../../operator/zip');
-Observable_1.Observable.prototype.zip = zip_1.zipProto;
-
-},{"../../Observable":114,"../../operator/zip":406}],252:[function(require,module,exports){
-"use strict";
-var Observable_1 = require('../../Observable');
-var zipAll_1 = require('../../operator/zipAll');
-Observable_1.Observable.prototype.zipAll = zipAll_1.zipAll;
-
-},{"../../Observable":114,"../../operator/zipAll":407}],253:[function(require,module,exports){
+},{"../../Observable":90,"../../operator/retryWhen":123}],102:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -19552,7 +14791,7 @@ var ArrayLikeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayLikeObservable = ArrayLikeObservable;
 
-},{"../Observable":114,"./EmptyObservable":259,"./ScalarObservable":273}],254:[function(require,module,exports){
+},{"../Observable":90,"./EmptyObservable":105,"./ScalarObservable":110}],103:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -19675,540 +14914,7 @@ var ArrayObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayObservable = ArrayObservable;
 
-},{"../Observable":114,"../util/isScheduler":451,"./EmptyObservable":259,"./ScalarObservable":273}],255:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var tryCatch_1 = require('../util/tryCatch');
-var errorObject_1 = require('../util/errorObject');
-var AsyncSubject_1 = require('../AsyncSubject');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var BoundCallbackObservable = (function (_super) {
-    __extends(BoundCallbackObservable, _super);
-    function BoundCallbackObservable(callbackFunc, selector, args, context, scheduler) {
-        _super.call(this);
-        this.callbackFunc = callbackFunc;
-        this.selector = selector;
-        this.args = args;
-        this.context = context;
-        this.scheduler = scheduler;
-    }
-    /* tslint:enable:max-line-length */
-    /**
-     * Converts a callback API to a function that returns an Observable.
-     *
-     * <span class="informal">Give it a function `f` of type `f(x, callback)` and
-     * it will return a function `g` that when called as `g(x)` will output an
-     * Observable.</span>
-     *
-     * `bindCallback` is not an operator because its input and output are not
-     * Observables. The input is a function `func` with some parameters, but the
-     * last parameter must be a callback function that `func` calls when it is
-     * done.
-     *
-     * The output of `bindCallback` is a function that takes the same parameters
-     * as `func`, except the last one (the callback). When the output function
-     * is called with arguments, it will return an Observable. If `func` function
-     * calls its callback with one argument, the Observable will emit that value.
-     * If on the other hand callback is called with multiple values, resulting
-     * Observable will emit an array with these arguments.
-     *
-     * It is very important to remember, that input function `func` is not called
-     * when output function is, but rather when Observable returned by output
-     * function is subscribed. This means if `func` makes AJAX request, that request
-     * will be made every time someone subscribes to resulting Observable, but not before.
-     *
-     * Optionally, selector function can be passed to `bindObservable`. That function
-     * takes the same arguments as callback, and returns value
-     * that will be emitted by Observable instead of callback parameters themselves.
-     * Even though by default multiple arguments passed to callback appear in the stream as array,
-     * selector function will be called with arguments directly, just as callback would.
-     * This means you can imagine default selector (when one is not provided explicitly)
-     * as function that aggregates all its arguments into array, or simply returns first argument,
-     * if there is only one.
-     *
-     * Last optional parameter - {@link Scheduler} - can be used to control when call
-     * to `func` happens after someone subscribes to Observable, as well as when results
-     * passed to callback will be emitted. By default subscription to Observable calls `func`
-     * synchronously, but using `Scheduler.async` as last parameter will defer call to input function,
-     * just like wrapping that call in `setTimeout` with time `0` would. So if you use async Scheduler
-     * and call `subscribe` on output Observable, all function calls that are currently executing,
-     * will end before `func` is invoked.
-     *
-     * When it comes to emitting results passed to callback, by default they are emitted
-     * immediately after `func` invokes callback. In particular, if callback is called synchronously,
-     * then subscription to resulting Observable will call `next` function synchronously as well.
-     * If you want to defer that call, using `Scheduler.async` will, again, do the job.
-     * This means that by using `Scheduler.async` you can, in a sense, ensure that `func`
-     * always calls its callback asynchronously, thus avoiding terrifying Zalgo.
-     *
-     * Note that Observable created by output function will always emit only one value
-     * and then complete right after. Even if `func` calls callback multiple times, values from
-     * second and following calls will never appear in the stream. If you need to
-     * listen for multiple calls, you probably want to use {@link fromEvent} or
-     * {@link fromEventPattern} instead.
-     *
-     * If `func` depends on some context (`this` property), that context will be set
-     * to the same context that output function has at call time. In particular, if `func`
-     * is called as method of some object, in order to preserve proper behaviour,
-     * it is recommended to set context of output function to that object as well,
-     * provided `func` is not already bound.
-     *
-     * If input function calls its callback in "node style" (i.e. first argument to callback is
-     * optional error parameter signaling whether call failed or not), {@link bindNodeCallback}
-     * provides convenient error handling and probably is a better choice.
-     * `bindCallback` will treat such functions without any difference and error parameter
-     * (whether passed or not) will always be interpreted as regular callback argument.
-     *
-     *
-     * @example <caption>Convert jQuery's getJSON to an Observable API</caption>
-     * // Suppose we have jQuery.getJSON('/my/url', callback)
-     * var getJSONAsObservable = Rx.Observable.bindCallback(jQuery.getJSON);
-     * var result = getJSONAsObservable('/my/url');
-     * result.subscribe(x => console.log(x), e => console.error(e));
-     *
-     *
-     * @example <caption>Receive array of arguments passed to callback</caption>
-     * someFunction((a, b, c) => {
-     *   console.log(a); // 5
-     *   console.log(b); // 'some string'
-     *   console.log(c); // {someProperty: 'someValue'}
-     * });
-     *
-     * const boundSomeFunction = Rx.Observable.bindCallback(someFunction);
-     * boundSomeFunction().subscribe(values => {
-     *   console.log(values) // [5, 'some string', {someProperty: 'someValue'}]
-     * });
-     *
-     *
-     * @example <caption>Use bindCallback with selector function</caption>
-     * someFunction((a, b, c) => {
-     *   console.log(a); // 'a'
-     *   console.log(b); // 'b'
-     *   console.log(c); // 'c'
-     * });
-     *
-     * const boundSomeFunction = Rx.Observable.bindCallback(someFunction, (a, b, c) => a + b + c);
-     * boundSomeFunction().subscribe(value => {
-     *   console.log(value) // 'abc'
-     * });
-     *
-     *
-     * @example <caption>Compare behaviour with and without async Scheduler</caption>
-     * function iCallMyCallbackSynchronously(cb) {
-     *   cb();
-     * }
-     *
-     * const boundSyncFn = Rx.Observable.bindCallback(iCallMyCallbackSynchronously);
-     * const boundAsyncFn = Rx.Observable.bindCallback(iCallMyCallbackSynchronously, null, Rx.Scheduler.async);
-     *
-     * boundSyncFn().subscribe(() => console.log('I was sync!'));
-     * boundAsyncFn().subscribe(() => console.log('I was async!'));
-     * console.log('This happened...');
-     *
-     * // Logs:
-     * // I was sync!
-     * // This happened...
-     * // I was async!
-     *
-     *
-     * @example <caption>Use bindCallback on object method</caption>
-     * const boundMethod = Rx.Observable.bindCallback(someObject.methodWithCallback);
-     * boundMethod.call(someObject) // make sure methodWithCallback has access to someObject
-     * .subscribe(subscriber);
-     *
-     *
-     * @see {@link bindNodeCallback}
-     * @see {@link from}
-     * @see {@link fromPromise}
-     *
-     * @param {function} func Function with a callback as the last parameter.
-     * @param {function} [selector] A function which takes the arguments from the
-     * callback and maps those to a value to emit on the output Observable.
-     * @param {Scheduler} [scheduler] The scheduler on which to schedule the
-     * callbacks.
-     * @return {function(...params: *): Observable} A function which returns the
-     * Observable that delivers the same values the callback would deliver.
-     * @static true
-     * @name bindCallback
-     * @owner Observable
-     */
-    BoundCallbackObservable.create = function (func, selector, scheduler) {
-        if (selector === void 0) { selector = undefined; }
-        return function () {
-            var args = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                args[_i - 0] = arguments[_i];
-            }
-            return new BoundCallbackObservable(func, selector, args, this, scheduler);
-        };
-    };
-    BoundCallbackObservable.prototype._subscribe = function (subscriber) {
-        var callbackFunc = this.callbackFunc;
-        var args = this.args;
-        var scheduler = this.scheduler;
-        var subject = this.subject;
-        if (!scheduler) {
-            if (!subject) {
-                subject = this.subject = new AsyncSubject_1.AsyncSubject();
-                var handler = function handlerFn() {
-                    var innerArgs = [];
-                    for (var _i = 0; _i < arguments.length; _i++) {
-                        innerArgs[_i - 0] = arguments[_i];
-                    }
-                    var source = handlerFn.source;
-                    var selector = source.selector, subject = source.subject;
-                    if (selector) {
-                        var result_1 = tryCatch_1.tryCatch(selector).apply(this, innerArgs);
-                        if (result_1 === errorObject_1.errorObject) {
-                            subject.error(errorObject_1.errorObject.e);
-                        }
-                        else {
-                            subject.next(result_1);
-                            subject.complete();
-                        }
-                    }
-                    else {
-                        subject.next(innerArgs.length <= 1 ? innerArgs[0] : innerArgs);
-                        subject.complete();
-                    }
-                };
-                // use named function instance to avoid closure.
-                handler.source = this;
-                var result = tryCatch_1.tryCatch(callbackFunc).apply(this.context, args.concat(handler));
-                if (result === errorObject_1.errorObject) {
-                    subject.error(errorObject_1.errorObject.e);
-                }
-            }
-            return subject.subscribe(subscriber);
-        }
-        else {
-            return scheduler.schedule(BoundCallbackObservable.dispatch, 0, { source: this, subscriber: subscriber, context: this.context });
-        }
-    };
-    BoundCallbackObservable.dispatch = function (state) {
-        var self = this;
-        var source = state.source, subscriber = state.subscriber, context = state.context;
-        var callbackFunc = source.callbackFunc, args = source.args, scheduler = source.scheduler;
-        var subject = source.subject;
-        if (!subject) {
-            subject = source.subject = new AsyncSubject_1.AsyncSubject();
-            var handler = function handlerFn() {
-                var innerArgs = [];
-                for (var _i = 0; _i < arguments.length; _i++) {
-                    innerArgs[_i - 0] = arguments[_i];
-                }
-                var source = handlerFn.source;
-                var selector = source.selector, subject = source.subject;
-                if (selector) {
-                    var result_2 = tryCatch_1.tryCatch(selector).apply(this, innerArgs);
-                    if (result_2 === errorObject_1.errorObject) {
-                        self.add(scheduler.schedule(dispatchError, 0, { err: errorObject_1.errorObject.e, subject: subject }));
-                    }
-                    else {
-                        self.add(scheduler.schedule(dispatchNext, 0, { value: result_2, subject: subject }));
-                    }
-                }
-                else {
-                    var value = innerArgs.length <= 1 ? innerArgs[0] : innerArgs;
-                    self.add(scheduler.schedule(dispatchNext, 0, { value: value, subject: subject }));
-                }
-            };
-            // use named function to pass values in without closure
-            handler.source = source;
-            var result = tryCatch_1.tryCatch(callbackFunc).apply(context, args.concat(handler));
-            if (result === errorObject_1.errorObject) {
-                subject.error(errorObject_1.errorObject.e);
-            }
-        }
-        self.add(subject.subscribe(subscriber));
-    };
-    return BoundCallbackObservable;
-}(Observable_1.Observable));
-exports.BoundCallbackObservable = BoundCallbackObservable;
-function dispatchNext(arg) {
-    var value = arg.value, subject = arg.subject;
-    subject.next(value);
-    subject.complete();
-}
-function dispatchError(arg) {
-    var err = arg.err, subject = arg.subject;
-    subject.error(err);
-}
-
-},{"../AsyncSubject":110,"../Observable":114,"../util/errorObject":443,"../util/tryCatch":457}],256:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var tryCatch_1 = require('../util/tryCatch');
-var errorObject_1 = require('../util/errorObject');
-var AsyncSubject_1 = require('../AsyncSubject');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var BoundNodeCallbackObservable = (function (_super) {
-    __extends(BoundNodeCallbackObservable, _super);
-    function BoundNodeCallbackObservable(callbackFunc, selector, args, context, scheduler) {
-        _super.call(this);
-        this.callbackFunc = callbackFunc;
-        this.selector = selector;
-        this.args = args;
-        this.context = context;
-        this.scheduler = scheduler;
-    }
-    /* tslint:enable:max-line-length */
-    /**
-     * Converts a Node.js-style callback API to a function that returns an
-     * Observable.
-     *
-     * <span class="informal">It's just like {@link bindCallback}, but the
-     * callback is expected to be of type `callback(error, result)`.</span>
-     *
-     * `bindNodeCallback` is not an operator because its input and output are not
-     * Observables. The input is a function `func` with some parameters, but the
-     * last parameter must be a callback function that `func` calls when it is
-     * done. The callback function is expected to follow Node.js conventions,
-     * where the first argument to the callback is an error object, signaling
-     * whether call was successful. If that object is passed to callback, it means
-     * something went wrong.
-     *
-     * The output of `bindNodeCallback` is a function that takes the same
-     * parameters as `func`, except the last one (the callback). When the output
-     * function is called with arguments, it will return an Observable.
-     * If `func` calls its callback with error parameter present, Observable will
-     * error with that value as well. If error parameter is not passed, Observable will emit
-     * second parameter. If there are more parameters (third and so on),
-     * Observable will emit an array with all arguments, except first error argument.
-     *
-     * Optionally `bindNodeCallback` accepts selector function, which allows you to
-     * make resulting Observable emit value computed by selector, instead of regular
-     * callback arguments. It works similarly to {@link bindCallback} selector, but
-     * Node.js-style error argument will never be passed to that function.
-     *
-     * Note that `func` will not be called at the same time output function is,
-     * but rather whenever resulting Observable is subscribed. By default call to
-     * `func` will happen synchronously after subscription, but that can be changed
-     * with proper {@link Scheduler} provided as optional third parameter. Scheduler
-     * can also control when values from callback will be emitted by Observable.
-     * To find out more, check out documentation for {@link bindCallback}, where
-     * Scheduler works exactly the same.
-     *
-     * As in {@link bindCallback}, context (`this` property) of input function will be set to context
-     * of returned function, when it is called.
-     *
-     * After Observable emits value, it will complete immediately. This means
-     * even if `func` calls callback again, values from second and consecutive
-     * calls will never appear on the stream. If you need to handle functions
-     * that call callbacks multiple times, check out {@link fromEvent} or
-     * {@link fromEventPattern} instead.
-     *
-     * Note that `bindNodeCallback` can be used in non-Node.js environments as well.
-     * "Node.js-style" callbacks are just a convention, so if you write for
-     * browsers or any other environment and API you use implements that callback style,
-     * `bindNodeCallback` can be safely used on that API functions as well.
-     *
-     * Remember that Error object passed to callback does not have to be an instance
-     * of JavaScript built-in `Error` object. In fact, it does not even have to an object.
-     * Error parameter of callback function is interpreted as "present", when value
-     * of that parameter is truthy. It could be, for example, non-zero number, non-empty
-     * string or boolean `true`. In all of these cases resulting Observable would error
-     * with that value. This means usually regular style callbacks will fail very often when
-     * `bindNodeCallback` is used. If your Observable errors much more often then you
-     * would expect, check if callback really is called in Node.js-style and, if not,
-     * switch to {@link bindCallback} instead.
-     *
-     * Note that even if error parameter is technically present in callback, but its value
-     * is falsy, it still won't appear in array emitted by Observable or in selector function.
-     *
-     *
-     * @example <caption>Read a file from the filesystem and get the data as an Observable</caption>
-     * import * as fs from 'fs';
-     * var readFileAsObservable = Rx.Observable.bindNodeCallback(fs.readFile);
-     * var result = readFileAsObservable('./roadNames.txt', 'utf8');
-     * result.subscribe(x => console.log(x), e => console.error(e));
-     *
-     *
-     * @example <caption>Use on function calling callback with multiple arguments</caption>
-     * someFunction((err, a, b) => {
-     *   console.log(err); // null
-     *   console.log(a); // 5
-     *   console.log(b); // "some string"
-     * });
-     * var boundSomeFunction = Rx.Observable.bindNodeCallback(someFunction);
-     * boundSomeFunction()
-     * .subscribe(value => {
-     *   console.log(value); // [5, "some string"]
-     * });
-     *
-     *
-     * @example <caption>Use with selector function</caption>
-     * someFunction((err, a, b) => {
-     *   console.log(err); // undefined
-     *   console.log(a); // "abc"
-     *   console.log(b); // "DEF"
-     * });
-     * var boundSomeFunction = Rx.Observable.bindNodeCallback(someFunction, (a, b) => a + b);
-     * boundSomeFunction()
-     * .subscribe(value => {
-     *   console.log(value); // "abcDEF"
-     * });
-     *
-     *
-     * @example <caption>Use on function calling callback in regular style</caption>
-     * someFunction(a => {
-     *   console.log(a); // 5
-     * });
-     * var boundSomeFunction = Rx.Observable.bindNodeCallback(someFunction);
-     * boundSomeFunction()
-     * .subscribe(
-     *   value => {}             // never gets called
-     *   err => console.log(err) // 5
-     *);
-     *
-     *
-     * @see {@link bindCallback}
-     * @see {@link from}
-     * @see {@link fromPromise}
-     *
-     * @param {function} func Function with a Node.js-style callback as the last parameter.
-     * @param {function} [selector] A function which takes the arguments from the
-     * callback and maps those to a value to emit on the output Observable.
-     * @param {Scheduler} [scheduler] The scheduler on which to schedule the
-     * callbacks.
-     * @return {function(...params: *): Observable} A function which returns the
-     * Observable that delivers the same values the Node.js callback would
-     * deliver.
-     * @static true
-     * @name bindNodeCallback
-     * @owner Observable
-     */
-    BoundNodeCallbackObservable.create = function (func, selector, scheduler) {
-        if (selector === void 0) { selector = undefined; }
-        return function () {
-            var args = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                args[_i - 0] = arguments[_i];
-            }
-            return new BoundNodeCallbackObservable(func, selector, args, this, scheduler);
-        };
-    };
-    BoundNodeCallbackObservable.prototype._subscribe = function (subscriber) {
-        var callbackFunc = this.callbackFunc;
-        var args = this.args;
-        var scheduler = this.scheduler;
-        var subject = this.subject;
-        if (!scheduler) {
-            if (!subject) {
-                subject = this.subject = new AsyncSubject_1.AsyncSubject();
-                var handler = function handlerFn() {
-                    var innerArgs = [];
-                    for (var _i = 0; _i < arguments.length; _i++) {
-                        innerArgs[_i - 0] = arguments[_i];
-                    }
-                    var source = handlerFn.source;
-                    var selector = source.selector, subject = source.subject;
-                    var err = innerArgs.shift();
-                    if (err) {
-                        subject.error(err);
-                    }
-                    else if (selector) {
-                        var result_1 = tryCatch_1.tryCatch(selector).apply(this, innerArgs);
-                        if (result_1 === errorObject_1.errorObject) {
-                            subject.error(errorObject_1.errorObject.e);
-                        }
-                        else {
-                            subject.next(result_1);
-                            subject.complete();
-                        }
-                    }
-                    else {
-                        subject.next(innerArgs.length <= 1 ? innerArgs[0] : innerArgs);
-                        subject.complete();
-                    }
-                };
-                // use named function instance to avoid closure.
-                handler.source = this;
-                var result = tryCatch_1.tryCatch(callbackFunc).apply(this.context, args.concat(handler));
-                if (result === errorObject_1.errorObject) {
-                    subject.error(errorObject_1.errorObject.e);
-                }
-            }
-            return subject.subscribe(subscriber);
-        }
-        else {
-            return scheduler.schedule(dispatch, 0, { source: this, subscriber: subscriber, context: this.context });
-        }
-    };
-    return BoundNodeCallbackObservable;
-}(Observable_1.Observable));
-exports.BoundNodeCallbackObservable = BoundNodeCallbackObservable;
-function dispatch(state) {
-    var self = this;
-    var source = state.source, subscriber = state.subscriber, context = state.context;
-    // XXX: cast to `any` to access to the private field in `source`.
-    var _a = source, callbackFunc = _a.callbackFunc, args = _a.args, scheduler = _a.scheduler;
-    var subject = source.subject;
-    if (!subject) {
-        subject = source.subject = new AsyncSubject_1.AsyncSubject();
-        var handler = function handlerFn() {
-            var innerArgs = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                innerArgs[_i - 0] = arguments[_i];
-            }
-            var source = handlerFn.source;
-            var selector = source.selector, subject = source.subject;
-            var err = innerArgs.shift();
-            if (err) {
-                self.add(scheduler.schedule(dispatchError, 0, { err: err, subject: subject }));
-            }
-            else if (selector) {
-                var result_2 = tryCatch_1.tryCatch(selector).apply(this, innerArgs);
-                if (result_2 === errorObject_1.errorObject) {
-                    self.add(scheduler.schedule(dispatchError, 0, { err: errorObject_1.errorObject.e, subject: subject }));
-                }
-                else {
-                    self.add(scheduler.schedule(dispatchNext, 0, { value: result_2, subject: subject }));
-                }
-            }
-            else {
-                var value = innerArgs.length <= 1 ? innerArgs[0] : innerArgs;
-                self.add(scheduler.schedule(dispatchNext, 0, { value: value, subject: subject }));
-            }
-        };
-        // use named function to pass values in without closure
-        handler.source = source;
-        var result = tryCatch_1.tryCatch(callbackFunc).apply(context, args.concat(handler));
-        if (result === errorObject_1.errorObject) {
-            self.add(scheduler.schedule(dispatchError, 0, { err: errorObject_1.errorObject.e, subject: subject }));
-        }
-    }
-    self.add(subject.subscribe(subscriber));
-}
-function dispatchNext(arg) {
-    var value = arg.value, subject = arg.subject;
-    subject.next(value);
-    subject.complete();
-}
-function dispatchError(arg) {
-    var err = arg.err, subject = arg.subject;
-    subject.error(err);
-}
-
-},{"../AsyncSubject":110,"../Observable":114,"../util/errorObject":443,"../util/tryCatch":457}],257:[function(require,module,exports){
+},{"../Observable":90,"../util/isScheduler":253,"./EmptyObservable":105,"./ScalarObservable":110}],104:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20219,6 +14925,7 @@ var Subject_1 = require('../Subject');
 var Observable_1 = require('../Observable');
 var Subscriber_1 = require('../Subscriber');
 var Subscription_1 = require('../Subscription');
+var refCount_1 = require('../operators/refCount');
 /**
  * @class ConnectableObservable<T>
  */
@@ -20259,7 +14966,7 @@ var ConnectableObservable = (function (_super) {
         return connection;
     };
     ConnectableObservable.prototype.refCount = function () {
-        return this.lift(new RefCountOperator(this));
+        return refCount_1.refCount()(this);
     };
     return ConnectableObservable;
 }(Observable_1.Observable));
@@ -20378,107 +15085,7 @@ var RefCountSubscriber = (function (_super) {
     return RefCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Observable":114,"../Subject":120,"../Subscriber":122,"../Subscription":123}],258:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var subscribeToResult_1 = require('../util/subscribeToResult');
-var OuterSubscriber_1 = require('../OuterSubscriber');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var DeferObservable = (function (_super) {
-    __extends(DeferObservable, _super);
-    function DeferObservable(observableFactory) {
-        _super.call(this);
-        this.observableFactory = observableFactory;
-    }
-    /**
-     * Creates an Observable that, on subscribe, calls an Observable factory to
-     * make an Observable for each new Observer.
-     *
-     * <span class="informal">Creates the Observable lazily, that is, only when it
-     * is subscribed.
-     * </span>
-     *
-     * <img src="./img/defer.png" width="100%">
-     *
-     * `defer` allows you to create the Observable only when the Observer
-     * subscribes, and create a fresh Observable for each Observer. It waits until
-     * an Observer subscribes to it, and then it generates an Observable,
-     * typically with an Observable factory function. It does this afresh for each
-     * subscriber, so although each subscriber may think it is subscribing to the
-     * same Observable, in fact each subscriber gets its own individual
-     * Observable.
-     *
-     * @example <caption>Subscribe to either an Observable of clicks or an Observable of interval, at random</caption>
-     * var clicksOrInterval = Rx.Observable.defer(function () {
-     *   if (Math.random() > 0.5) {
-     *     return Rx.Observable.fromEvent(document, 'click');
-     *   } else {
-     *     return Rx.Observable.interval(1000);
-     *   }
-     * });
-     * clicksOrInterval.subscribe(x => console.log(x));
-     *
-     * // Results in the following behavior:
-     * // If the result of Math.random() is greater than 0.5 it will listen
-     * // for clicks anywhere on the "document"; when document is clicked it
-     * // will log a MouseEvent object to the console. If the result is less
-     * // than 0.5 it will emit ascending numbers, one every second(1000ms).
-     *
-     * @see {@link create}
-     *
-     * @param {function(): SubscribableOrPromise} observableFactory The Observable
-     * factory function to invoke for each Observer that subscribes to the output
-     * Observable. May also return a Promise, which will be converted on the fly
-     * to an Observable.
-     * @return {Observable} An Observable whose Observers' subscriptions trigger
-     * an invocation of the given Observable factory function.
-     * @static true
-     * @name defer
-     * @owner Observable
-     */
-    DeferObservable.create = function (observableFactory) {
-        return new DeferObservable(observableFactory);
-    };
-    DeferObservable.prototype._subscribe = function (subscriber) {
-        return new DeferSubscriber(subscriber, this.observableFactory);
-    };
-    return DeferObservable;
-}(Observable_1.Observable));
-exports.DeferObservable = DeferObservable;
-var DeferSubscriber = (function (_super) {
-    __extends(DeferSubscriber, _super);
-    function DeferSubscriber(destination, factory) {
-        _super.call(this, destination);
-        this.factory = factory;
-        this.tryDefer();
-    }
-    DeferSubscriber.prototype.tryDefer = function () {
-        try {
-            this._callFactory();
-        }
-        catch (err) {
-            this._error(err);
-        }
-    };
-    DeferSubscriber.prototype._callFactory = function () {
-        var result = this.factory();
-        if (result) {
-            this.add(subscribeToResult_1.subscribeToResult(this, result));
-        }
-    };
-    return DeferSubscriber;
-}(OuterSubscriber_1.OuterSubscriber));
-
-},{"../Observable":114,"../OuterSubscriber":116,"../util/subscribeToResult":455}],259:[function(require,module,exports){
+},{"../Observable":90,"../Subject":95,"../Subscriber":97,"../Subscription":98,"../operators/refCount":185}],105:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20560,7 +15167,7 @@ var EmptyObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.EmptyObservable = EmptyObservable;
 
-},{"../Observable":114}],260:[function(require,module,exports){
+},{"../Observable":90}],106:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20644,375 +15251,7 @@ var ErrorObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ErrorObservable = ErrorObservable;
 
-},{"../Observable":114}],261:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var EmptyObservable_1 = require('./EmptyObservable');
-var isArray_1 = require('../util/isArray');
-var subscribeToResult_1 = require('../util/subscribeToResult');
-var OuterSubscriber_1 = require('../OuterSubscriber');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var ForkJoinObservable = (function (_super) {
-    __extends(ForkJoinObservable, _super);
-    function ForkJoinObservable(sources, resultSelector) {
-        _super.call(this);
-        this.sources = sources;
-        this.resultSelector = resultSelector;
-    }
-    /* tslint:enable:max-line-length */
-    /**
-     * @param sources
-     * @return {any}
-     * @static true
-     * @name forkJoin
-     * @owner Observable
-     */
-    ForkJoinObservable.create = function () {
-        var sources = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            sources[_i - 0] = arguments[_i];
-        }
-        if (sources === null || arguments.length === 0) {
-            return new EmptyObservable_1.EmptyObservable();
-        }
-        var resultSelector = null;
-        if (typeof sources[sources.length - 1] === 'function') {
-            resultSelector = sources.pop();
-        }
-        // if the first and only other argument besides the resultSelector is an array
-        // assume it's been called with `forkJoin([obs1, obs2, obs3], resultSelector)`
-        if (sources.length === 1 && isArray_1.isArray(sources[0])) {
-            sources = sources[0];
-        }
-        if (sources.length === 0) {
-            return new EmptyObservable_1.EmptyObservable();
-        }
-        return new ForkJoinObservable(sources, resultSelector);
-    };
-    ForkJoinObservable.prototype._subscribe = function (subscriber) {
-        return new ForkJoinSubscriber(subscriber, this.sources, this.resultSelector);
-    };
-    return ForkJoinObservable;
-}(Observable_1.Observable));
-exports.ForkJoinObservable = ForkJoinObservable;
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var ForkJoinSubscriber = (function (_super) {
-    __extends(ForkJoinSubscriber, _super);
-    function ForkJoinSubscriber(destination, sources, resultSelector) {
-        _super.call(this, destination);
-        this.sources = sources;
-        this.resultSelector = resultSelector;
-        this.completed = 0;
-        this.haveValues = 0;
-        var len = sources.length;
-        this.total = len;
-        this.values = new Array(len);
-        for (var i = 0; i < len; i++) {
-            var source = sources[i];
-            var innerSubscription = subscribeToResult_1.subscribeToResult(this, source, null, i);
-            if (innerSubscription) {
-                innerSubscription.outerIndex = i;
-                this.add(innerSubscription);
-            }
-        }
-    }
-    ForkJoinSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
-        this.values[outerIndex] = innerValue;
-        if (!innerSub._hasValue) {
-            innerSub._hasValue = true;
-            this.haveValues++;
-        }
-    };
-    ForkJoinSubscriber.prototype.notifyComplete = function (innerSub) {
-        var destination = this.destination;
-        var _a = this, haveValues = _a.haveValues, resultSelector = _a.resultSelector, values = _a.values;
-        var len = values.length;
-        if (!innerSub._hasValue) {
-            destination.complete();
-            return;
-        }
-        this.completed++;
-        if (this.completed !== len) {
-            return;
-        }
-        if (haveValues === len) {
-            var value = resultSelector ? resultSelector.apply(this, values) : values;
-            destination.next(value);
-        }
-        destination.complete();
-    };
-    return ForkJoinSubscriber;
-}(OuterSubscriber_1.OuterSubscriber));
-
-},{"../Observable":114,"../OuterSubscriber":116,"../util/isArray":444,"../util/subscribeToResult":455,"./EmptyObservable":259}],262:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var tryCatch_1 = require('../util/tryCatch');
-var isFunction_1 = require('../util/isFunction');
-var errorObject_1 = require('../util/errorObject');
-var Subscription_1 = require('../Subscription');
-var toString = Object.prototype.toString;
-function isNodeStyleEventEmitter(sourceObj) {
-    return !!sourceObj && typeof sourceObj.addListener === 'function' && typeof sourceObj.removeListener === 'function';
-}
-function isJQueryStyleEventEmitter(sourceObj) {
-    return !!sourceObj && typeof sourceObj.on === 'function' && typeof sourceObj.off === 'function';
-}
-function isNodeList(sourceObj) {
-    return !!sourceObj && toString.call(sourceObj) === '[object NodeList]';
-}
-function isHTMLCollection(sourceObj) {
-    return !!sourceObj && toString.call(sourceObj) === '[object HTMLCollection]';
-}
-function isEventTarget(sourceObj) {
-    return !!sourceObj && typeof sourceObj.addEventListener === 'function' && typeof sourceObj.removeEventListener === 'function';
-}
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var FromEventObservable = (function (_super) {
-    __extends(FromEventObservable, _super);
-    function FromEventObservable(sourceObj, eventName, selector, options) {
-        _super.call(this);
-        this.sourceObj = sourceObj;
-        this.eventName = eventName;
-        this.selector = selector;
-        this.options = options;
-    }
-    /* tslint:enable:max-line-length */
-    /**
-     * Creates an Observable that emits events of a specific type coming from the
-     * given event target.
-     *
-     * <span class="informal">Creates an Observable from DOM events, or Node
-     * EventEmitter events or others.</span>
-     *
-     * <img src="./img/fromEvent.png" width="100%">
-     *
-     * Creates an Observable by attaching an event listener to an "event target",
-     * which may be an object with `addEventListener` and `removeEventListener`,
-     * a Node.js EventEmitter, a jQuery style EventEmitter, a NodeList from the
-     * DOM, or an HTMLCollection from the DOM. The event handler is attached when
-     * the output Observable is subscribed, and removed when the Subscription is
-     * unsubscribed.
-     *
-     * @example <caption>Emits clicks happening on the DOM document</caption>
-     * var clicks = Rx.Observable.fromEvent(document, 'click');
-     * clicks.subscribe(x => console.log(x));
-     *
-     * // Results in:
-     * // MouseEvent object logged to console everytime a click
-     * // occurs on the document.
-     *
-     * @see {@link from}
-     * @see {@link fromEventPattern}
-     *
-     * @param {EventTargetLike} target The DOMElement, event target, Node.js
-     * EventEmitter, NodeList or HTMLCollection to attach the event handler to.
-     * @param {string} eventName The event name of interest, being emitted by the
-     * `target`.
-     * @param {EventListenerOptions} [options] Options to pass through to addEventListener
-     * @param {SelectorMethodSignature<T>} [selector] An optional function to
-     * post-process results. It takes the arguments from the event handler and
-     * should return a single value.
-     * @return {Observable<T>}
-     * @static true
-     * @name fromEvent
-     * @owner Observable
-     */
-    FromEventObservable.create = function (target, eventName, options, selector) {
-        if (isFunction_1.isFunction(options)) {
-            selector = options;
-            options = undefined;
-        }
-        return new FromEventObservable(target, eventName, selector, options);
-    };
-    FromEventObservable.setupSubscription = function (sourceObj, eventName, handler, subscriber, options) {
-        var unsubscribe;
-        if (isNodeList(sourceObj) || isHTMLCollection(sourceObj)) {
-            for (var i = 0, len = sourceObj.length; i < len; i++) {
-                FromEventObservable.setupSubscription(sourceObj[i], eventName, handler, subscriber, options);
-            }
-        }
-        else if (isEventTarget(sourceObj)) {
-            var source_1 = sourceObj;
-            sourceObj.addEventListener(eventName, handler, options);
-            unsubscribe = function () { return source_1.removeEventListener(eventName, handler); };
-        }
-        else if (isJQueryStyleEventEmitter(sourceObj)) {
-            var source_2 = sourceObj;
-            sourceObj.on(eventName, handler);
-            unsubscribe = function () { return source_2.off(eventName, handler); };
-        }
-        else if (isNodeStyleEventEmitter(sourceObj)) {
-            var source_3 = sourceObj;
-            sourceObj.addListener(eventName, handler);
-            unsubscribe = function () { return source_3.removeListener(eventName, handler); };
-        }
-        else {
-            throw new TypeError('Invalid event target');
-        }
-        subscriber.add(new Subscription_1.Subscription(unsubscribe));
-    };
-    FromEventObservable.prototype._subscribe = function (subscriber) {
-        var sourceObj = this.sourceObj;
-        var eventName = this.eventName;
-        var options = this.options;
-        var selector = this.selector;
-        var handler = selector ? function () {
-            var args = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                args[_i - 0] = arguments[_i];
-            }
-            var result = tryCatch_1.tryCatch(selector).apply(void 0, args);
-            if (result === errorObject_1.errorObject) {
-                subscriber.error(errorObject_1.errorObject.e);
-            }
-            else {
-                subscriber.next(result);
-            }
-        } : function (e) { return subscriber.next(e); };
-        FromEventObservable.setupSubscription(sourceObj, eventName, handler, subscriber, options);
-    };
-    return FromEventObservable;
-}(Observable_1.Observable));
-exports.FromEventObservable = FromEventObservable;
-
-},{"../Observable":114,"../Subscription":123,"../util/errorObject":443,"../util/isFunction":447,"../util/tryCatch":457}],263:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var isFunction_1 = require('../util/isFunction');
-var Observable_1 = require('../Observable');
-var Subscription_1 = require('../Subscription');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var FromEventPatternObservable = (function (_super) {
-    __extends(FromEventPatternObservable, _super);
-    function FromEventPatternObservable(addHandler, removeHandler, selector) {
-        _super.call(this);
-        this.addHandler = addHandler;
-        this.removeHandler = removeHandler;
-        this.selector = selector;
-    }
-    /**
-     * Creates an Observable from an API based on addHandler/removeHandler
-     * functions.
-     *
-     * <span class="informal">Converts any addHandler/removeHandler API to an
-     * Observable.</span>
-     *
-     * <img src="./img/fromEventPattern.png" width="100%">
-     *
-     * Creates an Observable by using the `addHandler` and `removeHandler`
-     * functions to add and remove the handlers, with an optional selector
-     * function to project the event arguments to a result. The `addHandler` is
-     * called when the output Observable is subscribed, and `removeHandler` is
-     * called when the Subscription is unsubscribed.
-     *
-     * @example <caption>Emits clicks happening on the DOM document</caption>
-     * function addClickHandler(handler) {
-     *   document.addEventListener('click', handler);
-     * }
-     *
-     * function removeClickHandler(handler) {
-     *   document.removeEventListener('click', handler);
-     * }
-     *
-     * var clicks = Rx.Observable.fromEventPattern(
-     *   addClickHandler,
-     *   removeClickHandler
-     * );
-     * clicks.subscribe(x => console.log(x));
-     *
-     * @see {@link from}
-     * @see {@link fromEvent}
-     *
-     * @param {function(handler: Function): any} addHandler A function that takes
-     * a `handler` function as argument and attaches it somehow to the actual
-     * source of events.
-     * @param {function(handler: Function, signal?: any): void} [removeHandler] An optional function that
-     * takes a `handler` function as argument and removes it in case it was
-     * previously attached using `addHandler`. if addHandler returns signal to teardown when remove,
-     * removeHandler function will forward it.
-     * @param {function(...args: any): T} [selector] An optional function to
-     * post-process results. It takes the arguments from the event handler and
-     * should return a single value.
-     * @return {Observable<T>}
-     * @static true
-     * @name fromEventPattern
-     * @owner Observable
-     */
-    FromEventPatternObservable.create = function (addHandler, removeHandler, selector) {
-        return new FromEventPatternObservable(addHandler, removeHandler, selector);
-    };
-    FromEventPatternObservable.prototype._subscribe = function (subscriber) {
-        var _this = this;
-        var removeHandler = this.removeHandler;
-        var handler = !!this.selector ? function () {
-            var args = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                args[_i - 0] = arguments[_i];
-            }
-            _this._callSelector(subscriber, args);
-        } : function (e) { subscriber.next(e); };
-        var retValue = this._callAddHandler(handler, subscriber);
-        if (!isFunction_1.isFunction(removeHandler)) {
-            return;
-        }
-        subscriber.add(new Subscription_1.Subscription(function () {
-            //TODO: determine whether or not to forward to error handler
-            removeHandler(handler, retValue);
-        }));
-    };
-    FromEventPatternObservable.prototype._callSelector = function (subscriber, args) {
-        try {
-            var result = this.selector.apply(this, args);
-            subscriber.next(result);
-        }
-        catch (e) {
-            subscriber.error(e);
-        }
-    };
-    FromEventPatternObservable.prototype._callAddHandler = function (handler, errorSubscriber) {
-        try {
-            return this.addHandler(handler) || null;
-        }
-        catch (e) {
-            errorSubscriber.error(e);
-        }
-    };
-    return FromEventPatternObservable;
-}(Observable_1.Observable));
-exports.FromEventPatternObservable = FromEventPatternObservable;
-
-},{"../Observable":114,"../Subscription":123,"../util/isFunction":447}],264:[function(require,module,exports){
+},{"../Observable":90}],107:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21028,7 +15267,7 @@ var ArrayObservable_1 = require('./ArrayObservable');
 var ArrayLikeObservable_1 = require('./ArrayLikeObservable');
 var iterator_1 = require('../symbol/iterator');
 var Observable_1 = require('../Observable');
-var observeOn_1 = require('../operator/observeOn');
+var observeOn_1 = require('../operators/observeOn');
 var observable_1 = require('../symbol/observable');
 /**
  * We need this JSDoc comment for affecting ESDoc.
@@ -21135,294 +15374,7 @@ var FromObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromObservable = FromObservable;
 
-},{"../Observable":114,"../operator/observeOn":357,"../symbol/iterator":422,"../symbol/observable":423,"../util/isArray":444,"../util/isArrayLike":445,"../util/isPromise":450,"./ArrayLikeObservable":253,"./ArrayObservable":254,"./IteratorObservable":268,"./PromiseObservable":271}],265:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var isScheduler_1 = require('../util/isScheduler');
-var selfSelector = function (value) { return value; };
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var GenerateObservable = (function (_super) {
-    __extends(GenerateObservable, _super);
-    function GenerateObservable(initialState, condition, iterate, resultSelector, scheduler) {
-        _super.call(this);
-        this.initialState = initialState;
-        this.condition = condition;
-        this.iterate = iterate;
-        this.resultSelector = resultSelector;
-        this.scheduler = scheduler;
-    }
-    GenerateObservable.create = function (initialStateOrOptions, condition, iterate, resultSelectorOrObservable, scheduler) {
-        if (arguments.length == 1) {
-            return new GenerateObservable(initialStateOrOptions.initialState, initialStateOrOptions.condition, initialStateOrOptions.iterate, initialStateOrOptions.resultSelector || selfSelector, initialStateOrOptions.scheduler);
-        }
-        if (resultSelectorOrObservable === undefined || isScheduler_1.isScheduler(resultSelectorOrObservable)) {
-            return new GenerateObservable(initialStateOrOptions, condition, iterate, selfSelector, resultSelectorOrObservable);
-        }
-        return new GenerateObservable(initialStateOrOptions, condition, iterate, resultSelectorOrObservable, scheduler);
-    };
-    GenerateObservable.prototype._subscribe = function (subscriber) {
-        var state = this.initialState;
-        if (this.scheduler) {
-            return this.scheduler.schedule(GenerateObservable.dispatch, 0, {
-                subscriber: subscriber,
-                iterate: this.iterate,
-                condition: this.condition,
-                resultSelector: this.resultSelector,
-                state: state });
-        }
-        var _a = this, condition = _a.condition, resultSelector = _a.resultSelector, iterate = _a.iterate;
-        do {
-            if (condition) {
-                var conditionResult = void 0;
-                try {
-                    conditionResult = condition(state);
-                }
-                catch (err) {
-                    subscriber.error(err);
-                    return;
-                }
-                if (!conditionResult) {
-                    subscriber.complete();
-                    break;
-                }
-            }
-            var value = void 0;
-            try {
-                value = resultSelector(state);
-            }
-            catch (err) {
-                subscriber.error(err);
-                return;
-            }
-            subscriber.next(value);
-            if (subscriber.closed) {
-                break;
-            }
-            try {
-                state = iterate(state);
-            }
-            catch (err) {
-                subscriber.error(err);
-                return;
-            }
-        } while (true);
-    };
-    GenerateObservable.dispatch = function (state) {
-        var subscriber = state.subscriber, condition = state.condition;
-        if (subscriber.closed) {
-            return;
-        }
-        if (state.needIterate) {
-            try {
-                state.state = state.iterate(state.state);
-            }
-            catch (err) {
-                subscriber.error(err);
-                return;
-            }
-        }
-        else {
-            state.needIterate = true;
-        }
-        if (condition) {
-            var conditionResult = void 0;
-            try {
-                conditionResult = condition(state.state);
-            }
-            catch (err) {
-                subscriber.error(err);
-                return;
-            }
-            if (!conditionResult) {
-                subscriber.complete();
-                return;
-            }
-            if (subscriber.closed) {
-                return;
-            }
-        }
-        var value;
-        try {
-            value = state.resultSelector(state.state);
-        }
-        catch (err) {
-            subscriber.error(err);
-            return;
-        }
-        if (subscriber.closed) {
-            return;
-        }
-        subscriber.next(value);
-        if (subscriber.closed) {
-            return;
-        }
-        return this.schedule(state);
-    };
-    return GenerateObservable;
-}(Observable_1.Observable));
-exports.GenerateObservable = GenerateObservable;
-
-},{"../Observable":114,"../util/isScheduler":451}],266:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var subscribeToResult_1 = require('../util/subscribeToResult');
-var OuterSubscriber_1 = require('../OuterSubscriber');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var IfObservable = (function (_super) {
-    __extends(IfObservable, _super);
-    function IfObservable(condition, thenSource, elseSource) {
-        _super.call(this);
-        this.condition = condition;
-        this.thenSource = thenSource;
-        this.elseSource = elseSource;
-    }
-    IfObservable.create = function (condition, thenSource, elseSource) {
-        return new IfObservable(condition, thenSource, elseSource);
-    };
-    IfObservable.prototype._subscribe = function (subscriber) {
-        var _a = this, condition = _a.condition, thenSource = _a.thenSource, elseSource = _a.elseSource;
-        return new IfSubscriber(subscriber, condition, thenSource, elseSource);
-    };
-    return IfObservable;
-}(Observable_1.Observable));
-exports.IfObservable = IfObservable;
-var IfSubscriber = (function (_super) {
-    __extends(IfSubscriber, _super);
-    function IfSubscriber(destination, condition, thenSource, elseSource) {
-        _super.call(this, destination);
-        this.condition = condition;
-        this.thenSource = thenSource;
-        this.elseSource = elseSource;
-        this.tryIf();
-    }
-    IfSubscriber.prototype.tryIf = function () {
-        var _a = this, condition = _a.condition, thenSource = _a.thenSource, elseSource = _a.elseSource;
-        var result;
-        try {
-            result = condition();
-            var source = result ? thenSource : elseSource;
-            if (source) {
-                this.add(subscribeToResult_1.subscribeToResult(this, source));
-            }
-            else {
-                this._complete();
-            }
-        }
-        catch (err) {
-            this._error(err);
-        }
-    };
-    return IfSubscriber;
-}(OuterSubscriber_1.OuterSubscriber));
-
-},{"../Observable":114,"../OuterSubscriber":116,"../util/subscribeToResult":455}],267:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var isNumeric_1 = require('../util/isNumeric');
-var Observable_1 = require('../Observable');
-var async_1 = require('../scheduler/async');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var IntervalObservable = (function (_super) {
-    __extends(IntervalObservable, _super);
-    function IntervalObservable(period, scheduler) {
-        if (period === void 0) { period = 0; }
-        if (scheduler === void 0) { scheduler = async_1.async; }
-        _super.call(this);
-        this.period = period;
-        this.scheduler = scheduler;
-        if (!isNumeric_1.isNumeric(period) || period < 0) {
-            this.period = 0;
-        }
-        if (!scheduler || typeof scheduler.schedule !== 'function') {
-            this.scheduler = async_1.async;
-        }
-    }
-    /**
-     * Creates an Observable that emits sequential numbers every specified
-     * interval of time, on a specified IScheduler.
-     *
-     * <span class="informal">Emits incremental numbers periodically in time.
-     * </span>
-     *
-     * <img src="./img/interval.png" width="100%">
-     *
-     * `interval` returns an Observable that emits an infinite sequence of
-     * ascending integers, with a constant interval of time of your choosing
-     * between those emissions. The first emission is not sent immediately, but
-     * only after the first period has passed. By default, this operator uses the
-     * `async` IScheduler to provide a notion of time, but you may pass any
-     * IScheduler to it.
-     *
-     * @example <caption>Emits ascending numbers, one every second (1000ms)</caption>
-     * var numbers = Rx.Observable.interval(1000);
-     * numbers.subscribe(x => console.log(x));
-     *
-     * @see {@link timer}
-     * @see {@link delay}
-     *
-     * @param {number} [period=0] The interval size in milliseconds (by default)
-     * or the time unit determined by the scheduler's clock.
-     * @param {Scheduler} [scheduler=async] The IScheduler to use for scheduling
-     * the emission of values, and providing a notion of "time".
-     * @return {Observable} An Observable that emits a sequential number each time
-     * interval.
-     * @static true
-     * @name interval
-     * @owner Observable
-     */
-    IntervalObservable.create = function (period, scheduler) {
-        if (period === void 0) { period = 0; }
-        if (scheduler === void 0) { scheduler = async_1.async; }
-        return new IntervalObservable(period, scheduler);
-    };
-    IntervalObservable.dispatch = function (state) {
-        var index = state.index, subscriber = state.subscriber, period = state.period;
-        subscriber.next(index);
-        if (subscriber.closed) {
-            return;
-        }
-        state.index += 1;
-        this.schedule(state, period);
-    };
-    IntervalObservable.prototype._subscribe = function (subscriber) {
-        var index = 0;
-        var period = this.period;
-        var scheduler = this.scheduler;
-        subscriber.add(scheduler.schedule(IntervalObservable.dispatch, period, {
-            index: index, subscriber: subscriber, period: period
-        }));
-    };
-    return IntervalObservable;
-}(Observable_1.Observable));
-exports.IntervalObservable = IntervalObservable;
-
-},{"../Observable":114,"../scheduler/async":420,"../util/isNumeric":448}],268:[function(require,module,exports){
+},{"../Observable":90,"../operators/observeOn":174,"../symbol/iterator":232,"../symbol/observable":233,"../util/isArray":246,"../util/isArrayLike":247,"../util/isPromise":252,"./ArrayLikeObservable":102,"./ArrayObservable":103,"./IteratorObservable":108,"./PromiseObservable":109}],108:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21586,153 +15538,7 @@ function sign(value) {
     return valueAsNumber < 0 ? -1 : 1;
 }
 
-},{"../Observable":114,"../symbol/iterator":422,"../util/root":454}],269:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var noop_1 = require('../util/noop');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var NeverObservable = (function (_super) {
-    __extends(NeverObservable, _super);
-    function NeverObservable() {
-        _super.call(this);
-    }
-    /**
-     * Creates an Observable that emits no items to the Observer.
-     *
-     * <span class="informal">An Observable that never emits anything.</span>
-     *
-     * <img src="./img/never.png" width="100%">
-     *
-     * This static operator is useful for creating a simple Observable that emits
-     * neither values nor errors nor the completion notification. It can be used
-     * for testing purposes or for composing with other Observables. Please note
-     * that by never emitting a complete notification, this Observable keeps the
-     * subscription from being disposed automatically. Subscriptions need to be
-     * manually disposed.
-     *
-     * @example <caption>Emit the number 7, then never emit anything else (not even complete).</caption>
-     * function info() {
-     *   console.log('Will not be called');
-     * }
-     * var result = Rx.Observable.never().startWith(7);
-     * result.subscribe(x => console.log(x), info, info);
-     *
-     * @see {@link create}
-     * @see {@link empty}
-     * @see {@link of}
-     * @see {@link throw}
-     *
-     * @return {Observable} A "never" Observable: never emits anything.
-     * @static true
-     * @name never
-     * @owner Observable
-     */
-    NeverObservable.create = function () {
-        return new NeverObservable();
-    };
-    NeverObservable.prototype._subscribe = function (subscriber) {
-        noop_1.noop();
-    };
-    return NeverObservable;
-}(Observable_1.Observable));
-exports.NeverObservable = NeverObservable;
-
-},{"../Observable":114,"../util/noop":452}],270:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-function dispatch(state) {
-    var obj = state.obj, keys = state.keys, length = state.length, index = state.index, subscriber = state.subscriber;
-    if (index === length) {
-        subscriber.complete();
-        return;
-    }
-    var key = keys[index];
-    subscriber.next([key, obj[key]]);
-    state.index = index + 1;
-    this.schedule(state);
-}
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var PairsObservable = (function (_super) {
-    __extends(PairsObservable, _super);
-    function PairsObservable(obj, scheduler) {
-        _super.call(this);
-        this.obj = obj;
-        this.scheduler = scheduler;
-        this.keys = Object.keys(obj);
-    }
-    /**
-     * Convert an object into an observable sequence of [key, value] pairs
-     * using an optional IScheduler to enumerate the object.
-     *
-     * @example <caption>Converts a javascript object to an Observable</caption>
-     * var obj = {
-     *   foo: 42,
-     *   bar: 56,
-     *   baz: 78
-     * };
-     *
-     * var source = Rx.Observable.pairs(obj);
-     *
-     * var subscription = source.subscribe(
-     *   function (x) {
-     *     console.log('Next: %s', x);
-     *   },
-     *   function (err) {
-     *     console.log('Error: %s', err);
-     *   },
-     *   function () {
-     *     console.log('Completed');
-     *   });
-     *
-     * @param {Object} obj The object to inspect and turn into an
-     * Observable sequence.
-     * @param {Scheduler} [scheduler] An optional IScheduler to run the
-     * enumeration of the input sequence on.
-     * @returns {(Observable<Array<string | T>>)} An observable sequence of
-     * [key, value] pairs from the object.
-     */
-    PairsObservable.create = function (obj, scheduler) {
-        return new PairsObservable(obj, scheduler);
-    };
-    PairsObservable.prototype._subscribe = function (subscriber) {
-        var _a = this, keys = _a.keys, scheduler = _a.scheduler;
-        var length = keys.length;
-        if (scheduler) {
-            return scheduler.schedule(dispatch, 0, {
-                obj: this.obj, keys: keys, length: length, index: 0, subscriber: subscriber
-            });
-        }
-        else {
-            for (var idx = 0; idx < length; idx++) {
-                var key = keys[idx];
-                subscriber.next([key, this.obj[key]]);
-            }
-            subscriber.complete();
-        }
-    };
-    return PairsObservable;
-}(Observable_1.Observable));
-exports.PairsObservable = PairsObservable;
-
-},{"../Observable":114}],271:[function(require,module,exports){
+},{"../Observable":90,"../symbol/iterator":232,"../util/root":257}],109:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21854,104 +15660,7 @@ function dispatchError(arg) {
     }
 }
 
-},{"../Observable":114,"../util/root":454}],272:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var RangeObservable = (function (_super) {
-    __extends(RangeObservable, _super);
-    function RangeObservable(start, count, scheduler) {
-        _super.call(this);
-        this.start = start;
-        this._count = count;
-        this.scheduler = scheduler;
-    }
-    /**
-     * Creates an Observable that emits a sequence of numbers within a specified
-     * range.
-     *
-     * <span class="informal">Emits a sequence of numbers in a range.</span>
-     *
-     * <img src="./img/range.png" width="100%">
-     *
-     * `range` operator emits a range of sequential integers, in order, where you
-     * select the `start` of the range and its `length`. By default, uses no
-     * IScheduler and just delivers the notifications synchronously, but may use
-     * an optional IScheduler to regulate those deliveries.
-     *
-     * @example <caption>Emits the numbers 1 to 10</caption>
-     * var numbers = Rx.Observable.range(1, 10);
-     * numbers.subscribe(x => console.log(x));
-     *
-     * @see {@link timer}
-     * @see {@link interval}
-     *
-     * @param {number} [start=0] The value of the first integer in the sequence.
-     * @param {number} [count=0] The number of sequential integers to generate.
-     * @param {Scheduler} [scheduler] A {@link IScheduler} to use for scheduling
-     * the emissions of the notifications.
-     * @return {Observable} An Observable of numbers that emits a finite range of
-     * sequential integers.
-     * @static true
-     * @name range
-     * @owner Observable
-     */
-    RangeObservable.create = function (start, count, scheduler) {
-        if (start === void 0) { start = 0; }
-        if (count === void 0) { count = 0; }
-        return new RangeObservable(start, count, scheduler);
-    };
-    RangeObservable.dispatch = function (state) {
-        var start = state.start, index = state.index, count = state.count, subscriber = state.subscriber;
-        if (index >= count) {
-            subscriber.complete();
-            return;
-        }
-        subscriber.next(start);
-        if (subscriber.closed) {
-            return;
-        }
-        state.index = index + 1;
-        state.start = start + 1;
-        this.schedule(state);
-    };
-    RangeObservable.prototype._subscribe = function (subscriber) {
-        var index = 0;
-        var start = this.start;
-        var count = this._count;
-        var scheduler = this.scheduler;
-        if (scheduler) {
-            return scheduler.schedule(RangeObservable.dispatch, 0, {
-                index: index, count: count, start: start, subscriber: subscriber
-            });
-        }
-        else {
-            do {
-                if (index++ >= count) {
-                    subscriber.complete();
-                    break;
-                }
-                subscriber.next(start++);
-                if (subscriber.closed) {
-                    break;
-                }
-            } while (true);
-        }
-    };
-    return RangeObservable;
-}(Observable_1.Observable));
-exports.RangeObservable = RangeObservable;
-
-},{"../Observable":114}],273:[function(require,module,exports){
+},{"../Observable":90,"../util/root":257}],110:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -22010,59 +15719,7 @@ var ScalarObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ScalarObservable = ScalarObservable;
 
-},{"../Observable":114}],274:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var asap_1 = require('../scheduler/asap');
-var isNumeric_1 = require('../util/isNumeric');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var SubscribeOnObservable = (function (_super) {
-    __extends(SubscribeOnObservable, _super);
-    function SubscribeOnObservable(source, delayTime, scheduler) {
-        if (delayTime === void 0) { delayTime = 0; }
-        if (scheduler === void 0) { scheduler = asap_1.asap; }
-        _super.call(this);
-        this.source = source;
-        this.delayTime = delayTime;
-        this.scheduler = scheduler;
-        if (!isNumeric_1.isNumeric(delayTime) || delayTime < 0) {
-            this.delayTime = 0;
-        }
-        if (!scheduler || typeof scheduler.schedule !== 'function') {
-            this.scheduler = asap_1.asap;
-        }
-    }
-    SubscribeOnObservable.create = function (source, delay, scheduler) {
-        if (delay === void 0) { delay = 0; }
-        if (scheduler === void 0) { scheduler = asap_1.asap; }
-        return new SubscribeOnObservable(source, delay, scheduler);
-    };
-    SubscribeOnObservable.dispatch = function (arg) {
-        var source = arg.source, subscriber = arg.subscriber;
-        return this.add(source.subscribe(subscriber));
-    };
-    SubscribeOnObservable.prototype._subscribe = function (subscriber) {
-        var delay = this.delayTime;
-        var source = this.source;
-        var scheduler = this.scheduler;
-        return scheduler.schedule(SubscribeOnObservable.dispatch, delay, {
-            source: source, subscriber: subscriber
-        });
-    };
-    return SubscribeOnObservable;
-}(Observable_1.Observable));
-exports.SubscribeOnObservable = SubscribeOnObservable;
-
-},{"../Observable":114,"../scheduler/asap":419,"../util/isNumeric":448}],275:[function(require,module,exports){
+},{"../Observable":90}],111:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -22170,226 +15827,119 @@ var TimerObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.TimerObservable = TimerObservable;
 
-},{"../Observable":114,"../scheduler/async":420,"../util/isDate":446,"../util/isNumeric":448,"../util/isScheduler":451}],276:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var subscribeToResult_1 = require('../util/subscribeToResult');
-var OuterSubscriber_1 = require('../OuterSubscriber');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var UsingObservable = (function (_super) {
-    __extends(UsingObservable, _super);
-    function UsingObservable(resourceFactory, observableFactory) {
-        _super.call(this);
-        this.resourceFactory = resourceFactory;
-        this.observableFactory = observableFactory;
-    }
-    UsingObservable.create = function (resourceFactory, observableFactory) {
-        return new UsingObservable(resourceFactory, observableFactory);
-    };
-    UsingObservable.prototype._subscribe = function (subscriber) {
-        var _a = this, resourceFactory = _a.resourceFactory, observableFactory = _a.observableFactory;
-        var resource;
-        try {
-            resource = resourceFactory();
-            return new UsingSubscriber(subscriber, resource, observableFactory);
-        }
-        catch (err) {
-            subscriber.error(err);
-        }
-    };
-    return UsingObservable;
-}(Observable_1.Observable));
-exports.UsingObservable = UsingObservable;
-var UsingSubscriber = (function (_super) {
-    __extends(UsingSubscriber, _super);
-    function UsingSubscriber(destination, resource, observableFactory) {
-        _super.call(this, destination);
-        this.resource = resource;
-        this.observableFactory = observableFactory;
-        destination.add(resource);
-        this.tryUse();
-    }
-    UsingSubscriber.prototype.tryUse = function () {
-        try {
-            var source = this.observableFactory.call(this, this.resource);
-            if (source) {
-                this.add(subscribeToResult_1.subscribeToResult(this, source));
-            }
-        }
-        catch (err) {
-            this._error(err);
-        }
-    };
-    return UsingSubscriber;
-}(OuterSubscriber_1.OuterSubscriber));
-
-},{"../Observable":114,"../OuterSubscriber":116,"../util/subscribeToResult":455}],277:[function(require,module,exports){
-"use strict";
-var BoundCallbackObservable_1 = require('./BoundCallbackObservable');
-exports.bindCallback = BoundCallbackObservable_1.BoundCallbackObservable.create;
-
-},{"./BoundCallbackObservable":255}],278:[function(require,module,exports){
-"use strict";
-var BoundNodeCallbackObservable_1 = require('./BoundNodeCallbackObservable');
-exports.bindNodeCallback = BoundNodeCallbackObservable_1.BoundNodeCallbackObservable.create;
-
-},{"./BoundNodeCallbackObservable":256}],279:[function(require,module,exports){
+},{"../Observable":90,"../scheduler/async":230,"../util/isDate":248,"../util/isNumeric":250,"../util/isScheduler":253}],112:[function(require,module,exports){
 "use strict";
 var isScheduler_1 = require('../util/isScheduler');
-var isArray_1 = require('../util/isArray');
-var ArrayObservable_1 = require('./ArrayObservable');
-var combineLatest_1 = require('../operator/combineLatest');
+var of_1 = require('./of');
+var from_1 = require('./from');
+var concatAll_1 = require('../operators/concatAll');
 /* tslint:enable:max-line-length */
 /**
- * Combines multiple Observables to create an Observable whose values are
- * calculated from the latest values of each of its input Observables.
+ * Creates an output Observable which sequentially emits all values from given
+ * Observable and then moves on to the next.
  *
- * <span class="informal">Whenever any input Observable emits a value, it
- * computes a formula using the latest values from all the inputs, then emits
- * the output of that formula.</span>
+ * <span class="informal">Concatenates multiple Observables together by
+ * sequentially emitting their values, one Observable after the other.</span>
  *
- * <img src="./img/combineLatest.png" width="100%">
+ * <img src="./img/concat.png" width="100%">
  *
- * `combineLatest` combines the values from all the Observables passed as
- * arguments. This is done by subscribing to each Observable in order and,
- * whenever any Observable emits, collecting an array of the most recent
- * values from each Observable. So if you pass `n` Observables to operator,
- * returned Observable will always emit an array of `n` values, in order
- * corresponding to order of passed Observables (value from the first Observable
- * on the first place and so on).
+ * `concat` joins multiple Observables together, by subscribing to them one at a time and
+ * merging their results into the output Observable. You can pass either an array of
+ * Observables, or put them directly as arguments. Passing an empty array will result
+ * in Observable that completes immediately.
  *
- * Static version of `combineLatest` accepts either an array of Observables
- * or each Observable can be put directly as an argument. Note that array of
- * Observables is good choice, if you don't know beforehand how many Observables
- * you will combine. Passing empty array will result in Observable that
- * completes immediately.
+ * `concat` will subscribe to first input Observable and emit all its values, without
+ * changing or affecting them in any way. When that Observable completes, it will
+ * subscribe to then next Observable passed and, again, emit its values. This will be
+ * repeated, until the operator runs out of Observables. When last input Observable completes,
+ * `concat` will complete as well. At any given moment only one Observable passed to operator
+ * emits values. If you would like to emit values from passed Observables concurrently, check out
+ * {@link merge} instead, especially with optional `concurrent` parameter. As a matter of fact,
+ * `concat` is an equivalent of `merge` operator with `concurrent` parameter set to `1`.
  *
- * To ensure output array has always the same length, `combineLatest` will
- * actually wait for all input Observables to emit at least once,
- * before it starts emitting results. This means if some Observable emits
- * values before other Observables started emitting, all that values but last
- * will be lost. On the other hand, is some Observable does not emit value but
- * completes, resulting Observable will complete at the same moment without
- * emitting anything, since it will be now impossible to include value from
- * completed Observable in resulting array. Also, if some input Observable does
- * not emit any value and never completes, `combineLatest` will also never emit
- * and never complete, since, again, it will wait for all streams to emit some
- * value.
+ * Note that if some input Observable never completes, `concat` will also never complete
+ * and Observables following the one that did not complete will never be subscribed. On the other
+ * hand, if some Observable simply completes immediately after it is subscribed, it will be
+ * invisible for `concat`, which will just move on to the next Observable.
  *
- * If at least one Observable was passed to `combineLatest` and all passed Observables
- * emitted something, resulting Observable will complete when all combined
- * streams complete. So even if some Observable completes, result of
- * `combineLatest` will still emit values when other Observables do. In case
- * of completed Observable, its value from now on will always be the last
- * emitted value. On the other hand, if any Observable errors, `combineLatest`
- * will error immediately as well, and all other Observables will be unsubscribed.
+ * If any Observable in chain errors, instead of passing control to the next Observable,
+ * `concat` will error immediately as well. Observables that would be subscribed after
+ * the one that emitted error, never will.
  *
- * `combineLatest` accepts as optional parameter `project` function, which takes
- * as arguments all values that would normally be emitted by resulting Observable.
- * `project` can return any kind of value, which will be then emitted by Observable
- * instead of default array. Note that `project` does not take as argument that array
- * of values, but values themselves. That means default `project` can be imagined
- * as function that takes all its arguments and puts them into an array.
+ * If you pass to `concat` the same Observable many times, its stream of values
+ * will be "replayed" on every subscription, which means you can repeat given Observable
+ * as many times as you like. If passing the same Observable to `concat` 1000 times becomes tedious,
+ * you can always use {@link repeat}.
+ *
+ * @example <caption>Concatenate a timer counting from 0 to 3 with a synchronous sequence from 1 to 10</caption>
+ * var timer = Rx.Observable.interval(1000).take(4);
+ * var sequence = Rx.Observable.range(1, 10);
+ * var result = Rx.Observable.concat(timer, sequence);
+ * result.subscribe(x => console.log(x));
+ *
+ * // results in:
+ * // 0 -1000ms-> 1 -1000ms-> 2 -1000ms-> 3 -immediate-> 1 ... 10
  *
  *
- * @example <caption>Combine two timer Observables</caption>
- * const firstTimer = Rx.Observable.timer(0, 1000); // emit 0, 1, 2... after every second, starting from now
- * const secondTimer = Rx.Observable.timer(500, 1000); // emit 0, 1, 2... after every second, starting 0,5s from now
- * const combinedTimers = Rx.Observable.combineLatest(firstTimer, secondTimer);
- * combinedTimers.subscribe(value => console.log(value));
- * // Logs
- * // [0, 0] after 0.5s
- * // [1, 0] after 1s
- * // [1, 1] after 1.5s
- * // [2, 1] after 2s
+ * @example <caption>Concatenate an array of 3 Observables</caption>
+ * var timer1 = Rx.Observable.interval(1000).take(10);
+ * var timer2 = Rx.Observable.interval(2000).take(6);
+ * var timer3 = Rx.Observable.interval(500).take(10);
+ * var result = Rx.Observable.concat([timer1, timer2, timer3]); // note that array is passed
+ * result.subscribe(x => console.log(x));
+ *
+ * // results in the following:
+ * // (Prints to console sequentially)
+ * // -1000ms-> 0 -1000ms-> 1 -1000ms-> ... 9
+ * // -2000ms-> 0 -2000ms-> 1 -2000ms-> ... 5
+ * // -500ms-> 0 -500ms-> 1 -500ms-> ... 9
  *
  *
- * @example <caption>Combine an array of Observables</caption>
- * const observables = [1, 5, 10].map(
- *   n => Rx.Observable.of(n).delay(n * 1000).startWith(0) // emit 0 and then emit n after n seconds
+ * @example <caption>Concatenate the same Observable to repeat it</caption>
+ * const timer = Rx.Observable.interval(1000).take(2);
+ *
+ * Rx.Observable.concat(timer, timer) // concating the same Observable!
+ * .subscribe(
+ *   value => console.log(value),
+ *   err => {},
+ *   () => console.log('...and it is done!')
  * );
- * const combined = Rx.Observable.combineLatest(observables);
- * combined.subscribe(value => console.log(value));
- * // Logs
- * // [0, 0, 0] immediately
- * // [1, 0, 0] after 1s
- * // [1, 5, 0] after 5s
- * // [1, 5, 10] after 10s
  *
+ * // Logs:
+ * // 0 after 1s
+ * // 1 after 2s
+ * // 0 after 3s
+ * // 1 after 4s
+ * // "...and it is done!" also after 4s
  *
- * @example <caption>Use project function to dynamically calculate the Body-Mass Index</caption>
- * var weight = Rx.Observable.of(70, 72, 76, 79, 75);
- * var height = Rx.Observable.of(1.76, 1.77, 1.78);
- * var bmi = Rx.Observable.combineLatest(weight, height, (w, h) => w / (h * h));
- * bmi.subscribe(x => console.log('BMI is ' + x));
+ * @see {@link concatAll}
+ * @see {@link concatMap}
+ * @see {@link concatMapTo}
  *
- * // With output to console:
- * // BMI is 24.212293388429753
- * // BMI is 23.93948099205209
- * // BMI is 23.671253629592222
- *
- *
- * @see {@link combineAll}
- * @see {@link merge}
- * @see {@link withLatestFrom}
- *
- * @param {ObservableInput} observable1 An input Observable to combine with other Observables.
- * @param {ObservableInput} observable2 An input Observable to combine with other Observables.
- * More than one input Observables may be given as arguments
- * or an array of Observables may be given as the first argument.
- * @param {function} [project] An optional function to project the values from
- * the combined latest values into a new value on the output Observable.
- * @param {Scheduler} [scheduler=null] The IScheduler to use for subscribing to
- * each input Observable.
- * @return {Observable} An Observable of projected values from the most recent
- * values from each input Observable, or an array of the most recent values from
- * each input Observable.
+ * @param {ObservableInput} input1 An input Observable to concatenate with others.
+ * @param {ObservableInput} input2 An input Observable to concatenate with others.
+ * More than one input Observables may be given as argument.
+ * @param {Scheduler} [scheduler=null] An optional IScheduler to schedule each
+ * Observable subscription on.
+ * @return {Observable} All values of each passed Observable merged into a
+ * single Observable, in order, in serial fashion.
  * @static true
- * @name combineLatest
+ * @name concat
  * @owner Observable
  */
-function combineLatest() {
+function concat() {
     var observables = [];
     for (var _i = 0; _i < arguments.length; _i++) {
         observables[_i - 0] = arguments[_i];
     }
-    var project = null;
-    var scheduler = null;
-    if (isScheduler_1.isScheduler(observables[observables.length - 1])) {
-        scheduler = observables.pop();
+    if (observables.length === 1 || (observables.length === 2 && isScheduler_1.isScheduler(observables[1]))) {
+        return from_1.from(observables[0]);
     }
-    if (typeof observables[observables.length - 1] === 'function') {
-        project = observables.pop();
-    }
-    // if the first and only other argument besides the resultSelector is an array
-    // assume it's been called with `combineLatest([obs1, obs2, obs3], project)`
-    if (observables.length === 1 && isArray_1.isArray(observables[0])) {
-        observables = observables[0];
-    }
-    return new ArrayObservable_1.ArrayObservable(observables, scheduler).lift(new combineLatest_1.CombineLatestOperator(project));
+    return concatAll_1.concatAll()(of_1.of.apply(void 0, observables));
 }
-exports.combineLatest = combineLatest;
+exports.concat = concat;
 
-},{"../operator/combineLatest":315,"../util/isArray":444,"../util/isScheduler":451,"./ArrayObservable":254}],280:[function(require,module,exports){
-"use strict";
-var concat_1 = require('../operator/concat');
-exports.concat = concat_1.concatStatic;
-
-},{"../operator/concat":316}],281:[function(require,module,exports){
-"use strict";
-var DeferObservable_1 = require('./DeferObservable');
-exports.defer = DeferObservable_1.DeferObservable.create;
-
-},{"./DeferObservable":258}],282:[function(require,module,exports){
+},{"../operators/concatAll":136,"../util/isScheduler":253,"./from":115,"./of":117}],113:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -22401,7 +15951,7 @@ var tryCatch_1 = require('../../util/tryCatch');
 var errorObject_1 = require('../../util/errorObject');
 var Observable_1 = require('../../Observable');
 var Subscriber_1 = require('../../Subscriber');
-var map_1 = require('../../operator/map');
+var map_1 = require('../../operators/map');
 function getCORSRequest() {
     if (root_1.root.XMLHttpRequest) {
         return new root_1.root.XMLHttpRequest();
@@ -22464,9 +16014,14 @@ function ajaxPatch(url, body, headers) {
 }
 exports.ajaxPatch = ajaxPatch;
 ;
+var mapResponse = map_1.map(function (x, index) { return x.response; });
 function ajaxGetJSON(url, headers) {
-    return new AjaxObservable({ method: 'GET', url: url, responseType: 'json', headers: headers })
-        .lift(new map_1.MapOperator(function (x, index) { return x.response; }, null));
+    return mapResponse(new AjaxObservable({
+        method: 'GET',
+        url: url,
+        responseType: 'json',
+        headers: headers
+    }));
 }
 exports.ajaxGetJSON = ajaxGetJSON;
 ;
@@ -22750,24 +16305,7 @@ var AjaxResponse = (function () {
         this.request = request;
         this.status = xhr.status;
         this.responseType = xhr.responseType || request.responseType;
-        switch (this.responseType) {
-            case 'json':
-                if ('response' in xhr) {
-                    //IE does not support json as responseType, parse it internally
-                    this.response = xhr.responseType ? xhr.response : JSON.parse(xhr.response || xhr.responseText || 'null');
-                }
-                else {
-                    this.response = JSON.parse(xhr.responseText || 'null');
-                }
-                break;
-            case 'xml':
-                this.response = xhr.responseXML;
-                break;
-            case 'text':
-            default:
-                this.response = ('response' in xhr) ? xhr.response : xhr.responseText;
-                break;
-        }
+        this.response = parseXhrResponse(this.responseType, xhr);
     }
     return AjaxResponse;
 }());
@@ -22787,10 +16325,33 @@ var AjaxError = (function (_super) {
         this.xhr = xhr;
         this.request = request;
         this.status = xhr.status;
+        this.responseType = xhr.responseType || request.responseType;
+        this.response = parseXhrResponse(this.responseType, xhr);
     }
     return AjaxError;
 }(Error));
 exports.AjaxError = AjaxError;
+function parseXhrResponse(responseType, xhr) {
+    switch (responseType) {
+        case 'json':
+            if ('response' in xhr) {
+                //IE does not support json as responseType, parse it internally
+                return xhr.responseType ? xhr.response : JSON.parse(xhr.response || xhr.responseText || 'null');
+            }
+            else {
+                // HACK(benlesh): TypeScript shennanigans
+                // tslint:disable-next-line:no-any latest TS seems to think xhr is "never" here.
+                return JSON.parse(xhr.responseText || 'null');
+            }
+        case 'xml':
+            return xhr.responseXML;
+        case 'text':
+        default:
+            // HACK(benlesh): TypeScript shennanigans
+            // tslint:disable-next-line:no-any latest TS seems to think xhr is "never" here.
+            return ('response' in xhr) ? xhr.response : xhr.responseText;
+    }
+}
 /**
  * @see {@link ajax}
  *
@@ -22805,368 +16366,555 @@ var AjaxTimeoutError = (function (_super) {
 }(AjaxError));
 exports.AjaxTimeoutError = AjaxTimeoutError;
 
-},{"../../Observable":114,"../../Subscriber":122,"../../operator/map":346,"../../util/errorObject":443,"../../util/root":454,"../../util/tryCatch":457}],283:[function(require,module,exports){
+},{"../../Observable":90,"../../Subscriber":97,"../../operators/map":163,"../../util/errorObject":244,"../../util/root":257,"../../util/tryCatch":260}],114:[function(require,module,exports){
+"use strict";
+var AjaxObservable_1 = require('./AjaxObservable');
+exports.ajax = AjaxObservable_1.AjaxObservable.create;
+
+},{"./AjaxObservable":113}],115:[function(require,module,exports){
+"use strict";
+var FromObservable_1 = require('./FromObservable');
+exports.from = FromObservable_1.FromObservable.create;
+
+},{"./FromObservable":107}],116:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../Observable');
+var ArrayObservable_1 = require('./ArrayObservable');
+var isScheduler_1 = require('../util/isScheduler');
+var mergeAll_1 = require('../operators/mergeAll');
+/* tslint:enable:max-line-length */
+/**
+ * Creates an output Observable which concurrently emits all values from every
+ * given input Observable.
+ *
+ * <span class="informal">Flattens multiple Observables together by blending
+ * their values into one Observable.</span>
+ *
+ * <img src="./img/merge.png" width="100%">
+ *
+ * `merge` subscribes to each given input Observable (as arguments), and simply
+ * forwards (without doing any transformation) all the values from all the input
+ * Observables to the output Observable. The output Observable only completes
+ * once all input Observables have completed. Any error delivered by an input
+ * Observable will be immediately emitted on the output Observable.
+ *
+ * @example <caption>Merge together two Observables: 1s interval and clicks</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var timer = Rx.Observable.interval(1000);
+ * var clicksOrTimer = Rx.Observable.merge(clicks, timer);
+ * clicksOrTimer.subscribe(x => console.log(x));
+ *
+ * // Results in the following:
+ * // timer will emit ascending values, one every second(1000ms) to console
+ * // clicks logs MouseEvents to console everytime the "document" is clicked
+ * // Since the two streams are merged you see these happening
+ * // as they occur.
+ *
+ * @example <caption>Merge together 3 Observables, but only 2 run concurrently</caption>
+ * var timer1 = Rx.Observable.interval(1000).take(10);
+ * var timer2 = Rx.Observable.interval(2000).take(6);
+ * var timer3 = Rx.Observable.interval(500).take(10);
+ * var concurrent = 2; // the argument
+ * var merged = Rx.Observable.merge(timer1, timer2, timer3, concurrent);
+ * merged.subscribe(x => console.log(x));
+ *
+ * // Results in the following:
+ * // - First timer1 and timer2 will run concurrently
+ * // - timer1 will emit a value every 1000ms for 10 iterations
+ * // - timer2 will emit a value every 2000ms for 6 iterations
+ * // - after timer1 hits it's max iteration, timer2 will
+ * //   continue, and timer3 will start to run concurrently with timer2
+ * // - when timer2 hits it's max iteration it terminates, and
+ * //   timer3 will continue to emit a value every 500ms until it is complete
+ *
+ * @see {@link mergeAll}
+ * @see {@link mergeMap}
+ * @see {@link mergeMapTo}
+ * @see {@link mergeScan}
+ *
+ * @param {...ObservableInput} observables Input Observables to merge together.
+ * @param {number} [concurrent=Number.POSITIVE_INFINITY] Maximum number of input
+ * Observables being subscribed to concurrently.
+ * @param {Scheduler} [scheduler=null] The IScheduler to use for managing
+ * concurrency of input Observables.
+ * @return {Observable} an Observable that emits items that are the result of
+ * every input Observable.
+ * @static true
+ * @name merge
+ * @owner Observable
+ */
+function merge() {
+    var observables = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        observables[_i - 0] = arguments[_i];
+    }
+    var concurrent = Number.POSITIVE_INFINITY;
+    var scheduler = null;
+    var last = observables[observables.length - 1];
+    if (isScheduler_1.isScheduler(last)) {
+        scheduler = observables.pop();
+        if (observables.length > 1 && typeof observables[observables.length - 1] === 'number') {
+            concurrent = observables.pop();
+        }
+    }
+    else if (typeof last === 'number') {
+        concurrent = observables.pop();
+    }
+    if (scheduler === null && observables.length === 1 && observables[0] instanceof Observable_1.Observable) {
+        return observables[0];
+    }
+    return mergeAll_1.mergeAll(concurrent)(new ArrayObservable_1.ArrayObservable(observables, scheduler));
+}
+exports.merge = merge;
+
+},{"../Observable":90,"../operators/mergeAll":168,"../util/isScheduler":253,"./ArrayObservable":103}],117:[function(require,module,exports){
+"use strict";
+var ArrayObservable_1 = require('./ArrayObservable');
+exports.of = ArrayObservable_1.ArrayObservable.of;
+
+},{"./ArrayObservable":103}],118:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
-var Subject_1 = require('../../Subject');
-var Subscriber_1 = require('../../Subscriber');
-var Observable_1 = require('../../Observable');
-var Subscription_1 = require('../../Subscription');
-var root_1 = require('../../util/root');
-var ReplaySubject_1 = require('../../ReplaySubject');
-var tryCatch_1 = require('../../util/tryCatch');
-var errorObject_1 = require('../../util/errorObject');
-var assign_1 = require('../../util/assign');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @extends {Ignored}
- * @hide true
- */
-var WebSocketSubject = (function (_super) {
-    __extends(WebSocketSubject, _super);
-    function WebSocketSubject(urlConfigOrSource, destination) {
-        if (urlConfigOrSource instanceof Observable_1.Observable) {
-            _super.call(this, destination, urlConfigOrSource);
+var isArray_1 = require('../util/isArray');
+var ArrayObservable_1 = require('../observable/ArrayObservable');
+var OuterSubscriber_1 = require('../OuterSubscriber');
+var subscribeToResult_1 = require('../util/subscribeToResult');
+function race() {
+    var observables = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        observables[_i - 0] = arguments[_i];
+    }
+    // if the only argument is an array, it was most likely called with
+    // `race([obs1, obs2, ...])`
+    if (observables.length === 1) {
+        if (isArray_1.isArray(observables[0])) {
+            observables = observables[0];
         }
         else {
-            _super.call(this);
-            this.WebSocketCtor = root_1.root.WebSocket;
-            this._output = new Subject_1.Subject();
-            if (typeof urlConfigOrSource === 'string') {
-                this.url = urlConfigOrSource;
-            }
-            else {
-                // WARNING: config object could override important members here.
-                assign_1.assign(this, urlConfigOrSource);
-            }
-            if (!this.WebSocketCtor) {
-                throw new Error('no WebSocket constructor can be found');
-            }
-            this.destination = new ReplaySubject_1.ReplaySubject();
+            return observables[0];
         }
     }
-    WebSocketSubject.prototype.resultSelector = function (e) {
-        return JSON.parse(e.data);
+    return new ArrayObservable_1.ArrayObservable(observables).lift(new RaceOperator());
+}
+exports.race = race;
+var RaceOperator = (function () {
+    function RaceOperator() {
+    }
+    RaceOperator.prototype.call = function (subscriber, source) {
+        return source.subscribe(new RaceSubscriber(subscriber));
     };
-    /**
-     * Wrapper around the w3c-compatible WebSocket object provided by the browser.
-     *
-     * @example <caption>Wraps browser WebSocket</caption>
-     *
-     * let socket$ = Observable.webSocket('ws://localhost:8081');
-     *
-     * socket$.subscribe(
-     *    (msg) => console.log('message received: ' + msg),
-     *    (err) => console.log(err),
-     *    () => console.log('complete')
-     *  );
-     *
-     * socket$.next(JSON.stringify({ op: 'hello' }));
-     *
-     * @example <caption>Wraps WebSocket from nodejs-websocket (using node.js)</caption>
-     *
-     * import { w3cwebsocket } from 'websocket';
-     *
-     * let socket$ = Observable.webSocket({
-     *   url: 'ws://localhost:8081',
-     *   WebSocketCtor: w3cwebsocket
-     * });
-     *
-     * socket$.subscribe(
-     *    (msg) => console.log('message received: ' + msg),
-     *    (err) => console.log(err),
-     *    () => console.log('complete')
-     *  );
-     *
-     * socket$.next(JSON.stringify({ op: 'hello' }));
-     *
-     * @param {string | WebSocketSubjectConfig} urlConfigOrSource the source of the websocket as an url or a structure defining the websocket object
-     * @return {WebSocketSubject}
-     * @static true
-     * @name webSocket
-     * @owner Observable
-     */
-    WebSocketSubject.create = function (urlConfigOrSource) {
-        return new WebSocketSubject(urlConfigOrSource);
+    return RaceOperator;
+}());
+exports.RaceOperator = RaceOperator;
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var RaceSubscriber = (function (_super) {
+    __extends(RaceSubscriber, _super);
+    function RaceSubscriber(destination) {
+        _super.call(this, destination);
+        this.hasFirst = false;
+        this.observables = [];
+        this.subscriptions = [];
+    }
+    RaceSubscriber.prototype._next = function (observable) {
+        this.observables.push(observable);
     };
-    WebSocketSubject.prototype.lift = function (operator) {
-        var sock = new WebSocketSubject(this, this.destination);
-        sock.operator = operator;
-        return sock;
-    };
-    WebSocketSubject.prototype._resetState = function () {
-        this.socket = null;
-        if (!this.source) {
-            this.destination = new ReplaySubject_1.ReplaySubject();
+    RaceSubscriber.prototype._complete = function () {
+        var observables = this.observables;
+        var len = observables.length;
+        if (len === 0) {
+            this.destination.complete();
         }
-        this._output = new Subject_1.Subject();
-    };
-    // TODO: factor this out to be a proper Operator/Subscriber implementation and eliminate closures
-    WebSocketSubject.prototype.multiplex = function (subMsg, unsubMsg, messageFilter) {
-        var self = this;
-        return new Observable_1.Observable(function (observer) {
-            var result = tryCatch_1.tryCatch(subMsg)();
-            if (result === errorObject_1.errorObject) {
-                observer.error(errorObject_1.errorObject.e);
-            }
-            else {
-                self.next(result);
-            }
-            var subscription = self.subscribe(function (x) {
-                var result = tryCatch_1.tryCatch(messageFilter)(x);
-                if (result === errorObject_1.errorObject) {
-                    observer.error(errorObject_1.errorObject.e);
+        else {
+            for (var i = 0; i < len && !this.hasFirst; i++) {
+                var observable = observables[i];
+                var subscription = subscribeToResult_1.subscribeToResult(this, observable, observable, i);
+                if (this.subscriptions) {
+                    this.subscriptions.push(subscription);
                 }
-                else if (result) {
-                    observer.next(x);
-                }
-            }, function (err) { return observer.error(err); }, function () { return observer.complete(); });
-            return function () {
-                var result = tryCatch_1.tryCatch(unsubMsg)();
-                if (result === errorObject_1.errorObject) {
-                    observer.error(errorObject_1.errorObject.e);
-                }
-                else {
-                    self.next(result);
-                }
-                subscription.unsubscribe();
-            };
-        });
-    };
-    WebSocketSubject.prototype._connectSocket = function () {
-        var _this = this;
-        var WebSocketCtor = this.WebSocketCtor;
-        var observer = this._output;
-        var socket = null;
-        try {
-            socket = this.protocol ?
-                new WebSocketCtor(this.url, this.protocol) :
-                new WebSocketCtor(this.url);
-            this.socket = socket;
-            if (this.binaryType) {
-                this.socket.binaryType = this.binaryType;
+                this.add(subscription);
             }
-        }
-        catch (e) {
-            observer.error(e);
-            return;
-        }
-        var subscription = new Subscription_1.Subscription(function () {
-            _this.socket = null;
-            if (socket && socket.readyState === 1) {
-                socket.close();
-            }
-        });
-        socket.onopen = function (e) {
-            var openObserver = _this.openObserver;
-            if (openObserver) {
-                openObserver.next(e);
-            }
-            var queue = _this.destination;
-            _this.destination = Subscriber_1.Subscriber.create(function (x) { return socket.readyState === 1 && socket.send(x); }, function (e) {
-                var closingObserver = _this.closingObserver;
-                if (closingObserver) {
-                    closingObserver.next(undefined);
-                }
-                if (e && e.code) {
-                    socket.close(e.code, e.reason);
-                }
-                else {
-                    observer.error(new TypeError('WebSocketSubject.error must be called with an object with an error code, ' +
-                        'and an optional reason: { code: number, reason: string }'));
-                }
-                _this._resetState();
-            }, function () {
-                var closingObserver = _this.closingObserver;
-                if (closingObserver) {
-                    closingObserver.next(undefined);
-                }
-                socket.close();
-                _this._resetState();
-            });
-            if (queue && queue instanceof ReplaySubject_1.ReplaySubject) {
-                subscription.add(queue.subscribe(_this.destination));
-            }
-        };
-        socket.onerror = function (e) {
-            _this._resetState();
-            observer.error(e);
-        };
-        socket.onclose = function (e) {
-            _this._resetState();
-            var closeObserver = _this.closeObserver;
-            if (closeObserver) {
-                closeObserver.next(e);
-            }
-            if (e.wasClean) {
-                observer.complete();
-            }
-            else {
-                observer.error(e);
-            }
-        };
-        socket.onmessage = function (e) {
-            var result = tryCatch_1.tryCatch(_this.resultSelector)(e);
-            if (result === errorObject_1.errorObject) {
-                observer.error(errorObject_1.errorObject.e);
-            }
-            else {
-                observer.next(result);
-            }
-        };
-    };
-    WebSocketSubject.prototype._subscribe = function (subscriber) {
-        var _this = this;
-        var source = this.source;
-        if (source) {
-            return source.subscribe(subscriber);
-        }
-        if (!this.socket) {
-            this._connectSocket();
-        }
-        var subscription = new Subscription_1.Subscription();
-        subscription.add(this._output.subscribe(subscriber));
-        subscription.add(function () {
-            var socket = _this.socket;
-            if (_this._output.observers.length === 0) {
-                if (socket && socket.readyState === 1) {
-                    socket.close();
-                }
-                _this._resetState();
-            }
-        });
-        return subscription;
-    };
-    WebSocketSubject.prototype.unsubscribe = function () {
-        var _a = this, source = _a.source, socket = _a.socket;
-        if (socket && socket.readyState === 1) {
-            socket.close();
-            this._resetState();
-        }
-        _super.prototype.unsubscribe.call(this);
-        if (!source) {
-            this.destination = new ReplaySubject_1.ReplaySubject();
+            this.observables = null;
         }
     };
-    return WebSocketSubject;
-}(Subject_1.AnonymousSubject));
-exports.WebSocketSubject = WebSocketSubject;
+    RaceSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
+        if (!this.hasFirst) {
+            this.hasFirst = true;
+            for (var i = 0; i < this.subscriptions.length; i++) {
+                if (i !== outerIndex) {
+                    var subscription = this.subscriptions[i];
+                    subscription.unsubscribe();
+                    this.remove(subscription);
+                }
+            }
+            this.subscriptions = null;
+        }
+        this.destination.next(innerValue);
+    };
+    return RaceSubscriber;
+}(OuterSubscriber_1.OuterSubscriber));
+exports.RaceSubscriber = RaceSubscriber;
 
-},{"../../Observable":114,"../../ReplaySubject":117,"../../Subject":120,"../../Subscriber":122,"../../Subscription":123,"../../util/assign":442,"../../util/errorObject":443,"../../util/root":454,"../../util/tryCatch":457}],284:[function(require,module,exports){
-"use strict";
-var AjaxObservable_1 = require('./AjaxObservable');
-exports.ajax = AjaxObservable_1.AjaxObservable.create;
-
-},{"./AjaxObservable":282}],285:[function(require,module,exports){
-"use strict";
-var WebSocketSubject_1 = require('./WebSocketSubject');
-exports.webSocket = WebSocketSubject_1.WebSocketSubject.create;
-
-},{"./WebSocketSubject":283}],286:[function(require,module,exports){
-"use strict";
-var EmptyObservable_1 = require('./EmptyObservable');
-exports.empty = EmptyObservable_1.EmptyObservable.create;
-
-},{"./EmptyObservable":259}],287:[function(require,module,exports){
-"use strict";
-var ForkJoinObservable_1 = require('./ForkJoinObservable');
-exports.forkJoin = ForkJoinObservable_1.ForkJoinObservable.create;
-
-},{"./ForkJoinObservable":261}],288:[function(require,module,exports){
-"use strict";
-var FromObservable_1 = require('./FromObservable');
-exports.from = FromObservable_1.FromObservable.create;
-
-},{"./FromObservable":264}],289:[function(require,module,exports){
-"use strict";
-var FromEventObservable_1 = require('./FromEventObservable');
-exports.fromEvent = FromEventObservable_1.FromEventObservable.create;
-
-},{"./FromEventObservable":262}],290:[function(require,module,exports){
-"use strict";
-var FromEventPatternObservable_1 = require('./FromEventPatternObservable');
-exports.fromEventPattern = FromEventPatternObservable_1.FromEventPatternObservable.create;
-
-},{"./FromEventPatternObservable":263}],291:[function(require,module,exports){
-"use strict";
-var PromiseObservable_1 = require('./PromiseObservable');
-exports.fromPromise = PromiseObservable_1.PromiseObservable.create;
-
-},{"./PromiseObservable":271}],292:[function(require,module,exports){
-"use strict";
-var GenerateObservable_1 = require('./GenerateObservable');
-exports.generate = GenerateObservable_1.GenerateObservable.create;
-
-},{"./GenerateObservable":265}],293:[function(require,module,exports){
-"use strict";
-var IfObservable_1 = require('./IfObservable');
-exports._if = IfObservable_1.IfObservable.create;
-
-},{"./IfObservable":266}],294:[function(require,module,exports){
-"use strict";
-var IntervalObservable_1 = require('./IntervalObservable');
-exports.interval = IntervalObservable_1.IntervalObservable.create;
-
-},{"./IntervalObservable":267}],295:[function(require,module,exports){
-"use strict";
-var merge_1 = require('../operator/merge');
-exports.merge = merge_1.mergeStatic;
-
-},{"../operator/merge":350}],296:[function(require,module,exports){
-"use strict";
-var NeverObservable_1 = require('./NeverObservable');
-exports.never = NeverObservable_1.NeverObservable.create;
-
-},{"./NeverObservable":269}],297:[function(require,module,exports){
-"use strict";
-var ArrayObservable_1 = require('./ArrayObservable');
-exports.of = ArrayObservable_1.ArrayObservable.of;
-
-},{"./ArrayObservable":254}],298:[function(require,module,exports){
-"use strict";
-var onErrorResumeNext_1 = require('../operator/onErrorResumeNext');
-exports.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNextStatic;
-
-},{"../operator/onErrorResumeNext":358}],299:[function(require,module,exports){
-"use strict";
-var PairsObservable_1 = require('./PairsObservable');
-exports.pairs = PairsObservable_1.PairsObservable.create;
-
-},{"./PairsObservable":270}],300:[function(require,module,exports){
-"use strict";
-var race_1 = require('../operator/race');
-exports.race = race_1.raceStatic;
-
-},{"../operator/race":366}],301:[function(require,module,exports){
-"use strict";
-var RangeObservable_1 = require('./RangeObservable');
-exports.range = RangeObservable_1.RangeObservable.create;
-
-},{"./RangeObservable":272}],302:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../observable/ArrayObservable":103,"../util/isArray":246,"../util/subscribeToResult":258}],119:[function(require,module,exports){
 "use strict";
 var ErrorObservable_1 = require('./ErrorObservable');
 exports._throw = ErrorObservable_1.ErrorObservable.create;
 
-},{"./ErrorObservable":260}],303:[function(require,module,exports){
+},{"./ErrorObservable":106}],120:[function(require,module,exports){
 "use strict";
 var TimerObservable_1 = require('./TimerObservable');
 exports.timer = TimerObservable_1.TimerObservable.create;
 
-},{"./TimerObservable":275}],304:[function(require,module,exports){
+},{"./TimerObservable":111}],121:[function(require,module,exports){
 "use strict";
-var UsingObservable_1 = require('./UsingObservable');
-exports.using = UsingObservable_1.UsingObservable.create;
+var catchError_1 = require('../operators/catchError');
+/**
+ * Catches errors on the observable to be handled by returning a new observable or throwing an error.
+ *
+ * <img src="./img/catch.png" width="100%">
+ *
+ * @example <caption>Continues with a different Observable when there's an error</caption>
+ *
+ * Observable.of(1, 2, 3, 4, 5)
+ *   .map(n => {
+ * 	   if (n == 4) {
+ * 	     throw 'four!';
+ *     }
+ *	   return n;
+ *   })
+ *   .catch(err => Observable.of('I', 'II', 'III', 'IV', 'V'))
+ *   .subscribe(x => console.log(x));
+ *   // 1, 2, 3, I, II, III, IV, V
+ *
+ * @example <caption>Retries the caught source Observable again in case of error, similar to retry() operator</caption>
+ *
+ * Observable.of(1, 2, 3, 4, 5)
+ *   .map(n => {
+ * 	   if (n === 4) {
+ * 	     throw 'four!';
+ *     }
+ * 	   return n;
+ *   })
+ *   .catch((err, caught) => caught)
+ *   .take(30)
+ *   .subscribe(x => console.log(x));
+ *   // 1, 2, 3, 1, 2, 3, ...
+ *
+ * @example <caption>Throws a new error when the source Observable throws an error</caption>
+ *
+ * Observable.of(1, 2, 3, 4, 5)
+ *   .map(n => {
+ *     if (n == 4) {
+ *       throw 'four!';
+ *     }
+ *     return n;
+ *   })
+ *   .catch(err => {
+ *     throw 'error in source. Details: ' + err;
+ *   })
+ *   .subscribe(
+ *     x => console.log(x),
+ *     err => console.log(err)
+ *   );
+ *   // 1, 2, 3, error in source. Details: four!
+ *
+ * @param {function} selector a function that takes as arguments `err`, which is the error, and `caught`, which
+ *  is the source observable, in case you'd like to "retry" that observable by returning it again. Whatever observable
+ *  is returned by the `selector` will be used to continue the observable chain.
+ * @return {Observable} An observable that originates from either the source or the observable returned by the
+ *  catch `selector` function.
+ * @method catch
+ * @name catch
+ * @owner Observable
+ */
+function _catch(selector) {
+    return catchError_1.catchError(selector)(this);
+}
+exports._catch = _catch;
 
-},{"./UsingObservable":276}],305:[function(require,module,exports){
+},{"../operators/catchError":132}],122:[function(require,module,exports){
 "use strict";
-var zip_1 = require('../operator/zip');
-exports.zip = zip_1.zipStatic;
+var map_1 = require('../operators/map');
+/**
+ * Applies a given `project` function to each value emitted by the source
+ * Observable, and emits the resulting values as an Observable.
+ *
+ * <span class="informal">Like [Array.prototype.map()](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/map),
+ * it passes each source value through a transformation function to get
+ * corresponding output values.</span>
+ *
+ * <img src="./img/map.png" width="100%">
+ *
+ * Similar to the well known `Array.prototype.map` function, this operator
+ * applies a projection to each value and emits that projection in the output
+ * Observable.
+ *
+ * @example <caption>Map every click to the clientX position of that click</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var positions = clicks.map(ev => ev.clientX);
+ * positions.subscribe(x => console.log(x));
+ *
+ * @see {@link mapTo}
+ * @see {@link pluck}
+ *
+ * @param {function(value: T, index: number): R} project The function to apply
+ * to each `value` emitted by the source Observable. The `index` parameter is
+ * the number `i` for the i-th emission that has happened since the
+ * subscription, starting from the number `0`.
+ * @param {any} [thisArg] An optional argument to define what `this` is in the
+ * `project` function.
+ * @return {Observable<R>} An Observable that emits the values from the source
+ * Observable transformed by the given `project` function.
+ * @method map
+ * @owner Observable
+ */
+function map(project, thisArg) {
+    return map_1.map(project, thisArg)(this);
+}
+exports.map = map;
 
-},{"../operator/zip":406}],306:[function(require,module,exports){
+},{"../operators/map":163}],123:[function(require,module,exports){
+"use strict";
+var retryWhen_1 = require('../operators/retryWhen');
+/**
+ * Returns an Observable that mirrors the source Observable with the exception of an `error`. If the source Observable
+ * calls `error`, this method will emit the Throwable that caused the error to the Observable returned from `notifier`.
+ * If that Observable calls `complete` or `error` then this method will call `complete` or `error` on the child
+ * subscription. Otherwise this method will resubscribe to the source Observable.
+ *
+ * <img src="./img/retryWhen.png" width="100%">
+ *
+ * @param {function(errors: Observable): Observable} notifier - Receives an Observable of notifications with which a
+ * user can `complete` or `error`, aborting the retry.
+ * @return {Observable} The source Observable modified with retry logic.
+ * @method retryWhen
+ * @owner Observable
+ */
+function retryWhen(notifier) {
+    return retryWhen_1.retryWhen(notifier)(this);
+}
+exports.retryWhen = retryWhen;
+
+},{"../operators/retryWhen":189}],124:[function(require,module,exports){
+"use strict";
+var audit_1 = require('./operators/audit');
+exports.audit = audit_1.audit;
+var auditTime_1 = require('./operators/auditTime');
+exports.auditTime = auditTime_1.auditTime;
+var buffer_1 = require('./operators/buffer');
+exports.buffer = buffer_1.buffer;
+var bufferCount_1 = require('./operators/bufferCount');
+exports.bufferCount = bufferCount_1.bufferCount;
+var bufferTime_1 = require('./operators/bufferTime');
+exports.bufferTime = bufferTime_1.bufferTime;
+var bufferToggle_1 = require('./operators/bufferToggle');
+exports.bufferToggle = bufferToggle_1.bufferToggle;
+var bufferWhen_1 = require('./operators/bufferWhen');
+exports.bufferWhen = bufferWhen_1.bufferWhen;
+var catchError_1 = require('./operators/catchError');
+exports.catchError = catchError_1.catchError;
+var combineAll_1 = require('./operators/combineAll');
+exports.combineAll = combineAll_1.combineAll;
+var combineLatest_1 = require('./operators/combineLatest');
+exports.combineLatest = combineLatest_1.combineLatest;
+var concat_1 = require('./operators/concat');
+exports.concat = concat_1.concat;
+var concatAll_1 = require('./operators/concatAll');
+exports.concatAll = concatAll_1.concatAll;
+var concatMap_1 = require('./operators/concatMap');
+exports.concatMap = concatMap_1.concatMap;
+var concatMapTo_1 = require('./operators/concatMapTo');
+exports.concatMapTo = concatMapTo_1.concatMapTo;
+var count_1 = require('./operators/count');
+exports.count = count_1.count;
+var debounce_1 = require('./operators/debounce');
+exports.debounce = debounce_1.debounce;
+var debounceTime_1 = require('./operators/debounceTime');
+exports.debounceTime = debounceTime_1.debounceTime;
+var defaultIfEmpty_1 = require('./operators/defaultIfEmpty');
+exports.defaultIfEmpty = defaultIfEmpty_1.defaultIfEmpty;
+var delay_1 = require('./operators/delay');
+exports.delay = delay_1.delay;
+var delayWhen_1 = require('./operators/delayWhen');
+exports.delayWhen = delayWhen_1.delayWhen;
+var dematerialize_1 = require('./operators/dematerialize');
+exports.dematerialize = dematerialize_1.dematerialize;
+var distinct_1 = require('./operators/distinct');
+exports.distinct = distinct_1.distinct;
+var distinctUntilChanged_1 = require('./operators/distinctUntilChanged');
+exports.distinctUntilChanged = distinctUntilChanged_1.distinctUntilChanged;
+var distinctUntilKeyChanged_1 = require('./operators/distinctUntilKeyChanged');
+exports.distinctUntilKeyChanged = distinctUntilKeyChanged_1.distinctUntilKeyChanged;
+var elementAt_1 = require('./operators/elementAt');
+exports.elementAt = elementAt_1.elementAt;
+var every_1 = require('./operators/every');
+exports.every = every_1.every;
+var exhaust_1 = require('./operators/exhaust');
+exports.exhaust = exhaust_1.exhaust;
+var exhaustMap_1 = require('./operators/exhaustMap');
+exports.exhaustMap = exhaustMap_1.exhaustMap;
+var expand_1 = require('./operators/expand');
+exports.expand = expand_1.expand;
+var filter_1 = require('./operators/filter');
+exports.filter = filter_1.filter;
+var finalize_1 = require('./operators/finalize');
+exports.finalize = finalize_1.finalize;
+var find_1 = require('./operators/find');
+exports.find = find_1.find;
+var findIndex_1 = require('./operators/findIndex');
+exports.findIndex = findIndex_1.findIndex;
+var first_1 = require('./operators/first');
+exports.first = first_1.first;
+var groupBy_1 = require('./operators/groupBy');
+exports.groupBy = groupBy_1.groupBy;
+var ignoreElements_1 = require('./operators/ignoreElements');
+exports.ignoreElements = ignoreElements_1.ignoreElements;
+var isEmpty_1 = require('./operators/isEmpty');
+exports.isEmpty = isEmpty_1.isEmpty;
+var last_1 = require('./operators/last');
+exports.last = last_1.last;
+var map_1 = require('./operators/map');
+exports.map = map_1.map;
+var mapTo_1 = require('./operators/mapTo');
+exports.mapTo = mapTo_1.mapTo;
+var materialize_1 = require('./operators/materialize');
+exports.materialize = materialize_1.materialize;
+var max_1 = require('./operators/max');
+exports.max = max_1.max;
+var merge_1 = require('./operators/merge');
+exports.merge = merge_1.merge;
+var mergeAll_1 = require('./operators/mergeAll');
+exports.mergeAll = mergeAll_1.mergeAll;
+var mergeMap_1 = require('./operators/mergeMap');
+exports.mergeMap = mergeMap_1.mergeMap;
+var mergeMap_2 = require('./operators/mergeMap');
+exports.flatMap = mergeMap_2.mergeMap;
+var mergeMapTo_1 = require('./operators/mergeMapTo');
+exports.mergeMapTo = mergeMapTo_1.mergeMapTo;
+var mergeScan_1 = require('./operators/mergeScan');
+exports.mergeScan = mergeScan_1.mergeScan;
+var min_1 = require('./operators/min');
+exports.min = min_1.min;
+var multicast_1 = require('./operators/multicast');
+exports.multicast = multicast_1.multicast;
+var observeOn_1 = require('./operators/observeOn');
+exports.observeOn = observeOn_1.observeOn;
+var onErrorResumeNext_1 = require('./operators/onErrorResumeNext');
+exports.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNext;
+var pairwise_1 = require('./operators/pairwise');
+exports.pairwise = pairwise_1.pairwise;
+var partition_1 = require('./operators/partition');
+exports.partition = partition_1.partition;
+var pluck_1 = require('./operators/pluck');
+exports.pluck = pluck_1.pluck;
+var publish_1 = require('./operators/publish');
+exports.publish = publish_1.publish;
+var publishBehavior_1 = require('./operators/publishBehavior');
+exports.publishBehavior = publishBehavior_1.publishBehavior;
+var publishLast_1 = require('./operators/publishLast');
+exports.publishLast = publishLast_1.publishLast;
+var publishReplay_1 = require('./operators/publishReplay');
+exports.publishReplay = publishReplay_1.publishReplay;
+var race_1 = require('./operators/race');
+exports.race = race_1.race;
+var reduce_1 = require('./operators/reduce');
+exports.reduce = reduce_1.reduce;
+var repeat_1 = require('./operators/repeat');
+exports.repeat = repeat_1.repeat;
+var repeatWhen_1 = require('./operators/repeatWhen');
+exports.repeatWhen = repeatWhen_1.repeatWhen;
+var retry_1 = require('./operators/retry');
+exports.retry = retry_1.retry;
+var retryWhen_1 = require('./operators/retryWhen');
+exports.retryWhen = retryWhen_1.retryWhen;
+var refCount_1 = require('./operators/refCount');
+exports.refCount = refCount_1.refCount;
+var sample_1 = require('./operators/sample');
+exports.sample = sample_1.sample;
+var sampleTime_1 = require('./operators/sampleTime');
+exports.sampleTime = sampleTime_1.sampleTime;
+var scan_1 = require('./operators/scan');
+exports.scan = scan_1.scan;
+var sequenceEqual_1 = require('./operators/sequenceEqual');
+exports.sequenceEqual = sequenceEqual_1.sequenceEqual;
+var share_1 = require('./operators/share');
+exports.share = share_1.share;
+var shareReplay_1 = require('./operators/shareReplay');
+exports.shareReplay = shareReplay_1.shareReplay;
+var single_1 = require('./operators/single');
+exports.single = single_1.single;
+var skip_1 = require('./operators/skip');
+exports.skip = skip_1.skip;
+var skipLast_1 = require('./operators/skipLast');
+exports.skipLast = skipLast_1.skipLast;
+var skipUntil_1 = require('./operators/skipUntil');
+exports.skipUntil = skipUntil_1.skipUntil;
+var skipWhile_1 = require('./operators/skipWhile');
+exports.skipWhile = skipWhile_1.skipWhile;
+var startWith_1 = require('./operators/startWith');
+exports.startWith = startWith_1.startWith;
+/**
+ * TODO(https://github.com/ReactiveX/rxjs/issues/2900): Add back subscribeOn once it can be
+ * treeshaken. Currently if this export is added back, it
+ * forces apps to bring in asap scheduler along with
+ * Immediate, root, and other supporting code.
+ */
+// export { subscribeOn } from './operators/subscribeOn';
+var switchAll_1 = require('./operators/switchAll');
+exports.switchAll = switchAll_1.switchAll;
+var switchMap_1 = require('./operators/switchMap');
+exports.switchMap = switchMap_1.switchMap;
+var switchMapTo_1 = require('./operators/switchMapTo');
+exports.switchMapTo = switchMapTo_1.switchMapTo;
+var take_1 = require('./operators/take');
+exports.take = take_1.take;
+var takeLast_1 = require('./operators/takeLast');
+exports.takeLast = takeLast_1.takeLast;
+var takeUntil_1 = require('./operators/takeUntil');
+exports.takeUntil = takeUntil_1.takeUntil;
+var takeWhile_1 = require('./operators/takeWhile');
+exports.takeWhile = takeWhile_1.takeWhile;
+var tap_1 = require('./operators/tap');
+exports.tap = tap_1.tap;
+var throttle_1 = require('./operators/throttle');
+exports.throttle = throttle_1.throttle;
+var throttleTime_1 = require('./operators/throttleTime');
+exports.throttleTime = throttleTime_1.throttleTime;
+var timeInterval_1 = require('./operators/timeInterval');
+exports.timeInterval = timeInterval_1.timeInterval;
+var timeout_1 = require('./operators/timeout');
+exports.timeout = timeout_1.timeout;
+var timeoutWith_1 = require('./operators/timeoutWith');
+exports.timeoutWith = timeoutWith_1.timeoutWith;
+var timestamp_1 = require('./operators/timestamp');
+exports.timestamp = timestamp_1.timestamp;
+var toArray_1 = require('./operators/toArray');
+exports.toArray = toArray_1.toArray;
+var window_1 = require('./operators/window');
+exports.window = window_1.window;
+var windowCount_1 = require('./operators/windowCount');
+exports.windowCount = windowCount_1.windowCount;
+var windowTime_1 = require('./operators/windowTime');
+exports.windowTime = windowTime_1.windowTime;
+var windowToggle_1 = require('./operators/windowToggle');
+exports.windowToggle = windowToggle_1.windowToggle;
+var windowWhen_1 = require('./operators/windowWhen');
+exports.windowWhen = windowWhen_1.windowWhen;
+var withLatestFrom_1 = require('./operators/withLatestFrom');
+exports.withLatestFrom = withLatestFrom_1.withLatestFrom;
+var zip_1 = require('./operators/zip');
+exports.zip = zip_1.zip;
+var zipAll_1 = require('./operators/zipAll');
+exports.zipAll = zipAll_1.zipAll;
+
+},{"./operators/audit":125,"./operators/auditTime":126,"./operators/buffer":127,"./operators/bufferCount":128,"./operators/bufferTime":129,"./operators/bufferToggle":130,"./operators/bufferWhen":131,"./operators/catchError":132,"./operators/combineAll":133,"./operators/combineLatest":134,"./operators/concat":135,"./operators/concatAll":136,"./operators/concatMap":137,"./operators/concatMapTo":138,"./operators/count":139,"./operators/debounce":140,"./operators/debounceTime":141,"./operators/defaultIfEmpty":142,"./operators/delay":143,"./operators/delayWhen":144,"./operators/dematerialize":145,"./operators/distinct":146,"./operators/distinctUntilChanged":147,"./operators/distinctUntilKeyChanged":148,"./operators/elementAt":149,"./operators/every":150,"./operators/exhaust":151,"./operators/exhaustMap":152,"./operators/expand":153,"./operators/filter":154,"./operators/finalize":155,"./operators/find":156,"./operators/findIndex":157,"./operators/first":158,"./operators/groupBy":159,"./operators/ignoreElements":160,"./operators/isEmpty":161,"./operators/last":162,"./operators/map":163,"./operators/mapTo":164,"./operators/materialize":165,"./operators/max":166,"./operators/merge":167,"./operators/mergeAll":168,"./operators/mergeMap":169,"./operators/mergeMapTo":170,"./operators/mergeScan":171,"./operators/min":172,"./operators/multicast":173,"./operators/observeOn":174,"./operators/onErrorResumeNext":175,"./operators/pairwise":176,"./operators/partition":177,"./operators/pluck":178,"./operators/publish":179,"./operators/publishBehavior":180,"./operators/publishLast":181,"./operators/publishReplay":182,"./operators/race":183,"./operators/reduce":184,"./operators/refCount":185,"./operators/repeat":186,"./operators/repeatWhen":187,"./operators/retry":188,"./operators/retryWhen":189,"./operators/sample":190,"./operators/sampleTime":191,"./operators/scan":192,"./operators/sequenceEqual":193,"./operators/share":194,"./operators/shareReplay":195,"./operators/single":196,"./operators/skip":197,"./operators/skipLast":198,"./operators/skipUntil":199,"./operators/skipWhile":200,"./operators/startWith":201,"./operators/switchAll":202,"./operators/switchMap":203,"./operators/switchMapTo":204,"./operators/take":205,"./operators/takeLast":206,"./operators/takeUntil":207,"./operators/takeWhile":208,"./operators/tap":209,"./operators/throttle":210,"./operators/throttleTime":211,"./operators/timeInterval":212,"./operators/timeout":213,"./operators/timeoutWith":214,"./operators/timestamp":215,"./operators/toArray":216,"./operators/window":217,"./operators/windowCount":218,"./operators/windowTime":219,"./operators/windowToggle":220,"./operators/windowWhen":221,"./operators/withLatestFrom":222,"./operators/zip":223,"./operators/zipAll":224}],125:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23218,7 +16966,9 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function audit(durationSelector) {
-    return this.lift(new AuditOperator(durationSelector));
+    return function auditOperatorFunction(source) {
+        return source.lift(new AuditOperator(durationSelector));
+    };
 }
 exports.audit = audit;
 var AuditOperator = (function () {
@@ -23283,15 +17033,11 @@ var AuditSubscriber = (function (_super) {
     return AuditSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],307:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],126:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
 var async_1 = require('../scheduler/async');
-var Subscriber_1 = require('../Subscriber');
+var audit_1 = require('./audit');
+var timer_1 = require('../observable/timer');
 /**
  * Ignores source values for `duration` milliseconds, then emits the most recent
  * value from the source Observable, then repeats this process.
@@ -23336,59 +17082,11 @@ var Subscriber_1 = require('../Subscriber');
  */
 function auditTime(duration, scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
-    return this.lift(new AuditTimeOperator(duration, scheduler));
+    return audit_1.audit(function () { return timer_1.timer(duration, scheduler); });
 }
 exports.auditTime = auditTime;
-var AuditTimeOperator = (function () {
-    function AuditTimeOperator(duration, scheduler) {
-        this.duration = duration;
-        this.scheduler = scheduler;
-    }
-    AuditTimeOperator.prototype.call = function (subscriber, source) {
-        return source.subscribe(new AuditTimeSubscriber(subscriber, this.duration, this.scheduler));
-    };
-    return AuditTimeOperator;
-}());
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var AuditTimeSubscriber = (function (_super) {
-    __extends(AuditTimeSubscriber, _super);
-    function AuditTimeSubscriber(destination, duration, scheduler) {
-        _super.call(this, destination);
-        this.duration = duration;
-        this.scheduler = scheduler;
-        this.hasValue = false;
-    }
-    AuditTimeSubscriber.prototype._next = function (value) {
-        this.value = value;
-        this.hasValue = true;
-        if (!this.throttled) {
-            this.add(this.throttled = this.scheduler.schedule(dispatchNext, this.duration, this));
-        }
-    };
-    AuditTimeSubscriber.prototype.clearThrottle = function () {
-        var _a = this, value = _a.value, hasValue = _a.hasValue, throttled = _a.throttled;
-        if (throttled) {
-            this.remove(throttled);
-            this.throttled = null;
-            throttled.unsubscribe();
-        }
-        if (hasValue) {
-            this.value = null;
-            this.hasValue = false;
-            this.destination.next(value);
-        }
-    };
-    return AuditTimeSubscriber;
-}(Subscriber_1.Subscriber));
-function dispatchNext(subscriber) {
-    subscriber.clearThrottle();
-}
 
-},{"../Subscriber":122,"../scheduler/async":420}],308:[function(require,module,exports){
+},{"../observable/timer":120,"../scheduler/async":230,"./audit":125}],127:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23430,7 +17128,9 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function buffer(closingNotifier) {
-    return this.lift(new BufferOperator(closingNotifier));
+    return function bufferOperatorFunction(source) {
+        return source.lift(new BufferOperator(closingNotifier));
+    };
 }
 exports.buffer = buffer;
 var BufferOperator = (function () {
@@ -23465,7 +17165,7 @@ var BufferSubscriber = (function (_super) {
     return BufferSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],309:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],128:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23516,7 +17216,9 @@ var Subscriber_1 = require('../Subscriber');
  */
 function bufferCount(bufferSize, startBufferEvery) {
     if (startBufferEvery === void 0) { startBufferEvery = null; }
-    return this.lift(new BufferCountOperator(bufferSize, startBufferEvery));
+    return function bufferCountOperatorFunction(source) {
+        return source.lift(new BufferCountOperator(bufferSize, startBufferEvery));
+    };
 }
 exports.bufferCount = bufferCount;
 var BufferCountOperator = (function () {
@@ -23606,7 +17308,7 @@ var BufferSkipCountSubscriber = (function (_super) {
     return BufferSkipCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],310:[function(require,module,exports){
+},{"../Subscriber":97}],129:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23675,7 +17377,9 @@ function bufferTime(bufferTimeSpan) {
     if (length >= 3) {
         maxBufferSize = arguments[2];
     }
-    return this.lift(new BufferTimeOperator(bufferTimeSpan, bufferCreationInterval, maxBufferSize, scheduler));
+    return function bufferTimeOperatorFunction(source) {
+        return source.lift(new BufferTimeOperator(bufferTimeSpan, bufferCreationInterval, maxBufferSize, scheduler));
+    };
 }
 exports.bufferTime = bufferTime;
 var BufferTimeOperator = (function () {
@@ -23806,7 +17510,7 @@ function dispatchBufferClose(arg) {
     subscriber.closeContext(context);
 }
 
-},{"../Subscriber":122,"../scheduler/async":420,"../util/isScheduler":451}],311:[function(require,module,exports){
+},{"../Subscriber":97,"../scheduler/async":230,"../util/isScheduler":253}],130:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23855,7 +17559,9 @@ var OuterSubscriber_1 = require('../OuterSubscriber');
  * @owner Observable
  */
 function bufferToggle(openings, closingSelector) {
-    return this.lift(new BufferToggleOperator(openings, closingSelector));
+    return function bufferToggleOperatorFunction(source) {
+        return source.lift(new BufferToggleOperator(openings, closingSelector));
+    };
 }
 exports.bufferToggle = bufferToggle;
 var BufferToggleOperator = (function () {
@@ -23959,7 +17665,7 @@ var BufferToggleSubscriber = (function (_super) {
     return BufferToggleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subscription":123,"../util/subscribeToResult":455}],312:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subscription":98,"../util/subscribeToResult":258}],131:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24005,7 +17711,9 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function bufferWhen(closingSelector) {
-    return this.lift(new BufferWhenOperator(closingSelector));
+    return function (source) {
+        return source.lift(new BufferWhenOperator(closingSelector));
+    };
 }
 exports.bufferWhen = bufferWhen;
 var BufferWhenOperator = (function () {
@@ -24082,7 +17790,7 @@ var BufferWhenSubscriber = (function (_super) {
     return BufferWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subscription":123,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],313:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subscription":98,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],132:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24146,16 +17854,16 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  *  is returned by the `selector` will be used to continue the observable chain.
  * @return {Observable} An observable that originates from either the source or the observable returned by the
  *  catch `selector` function.
- * @method catch
- * @name catch
- * @owner Observable
+ * @name catchError
  */
-function _catch(selector) {
-    var operator = new CatchOperator(selector);
-    var caught = this.lift(operator);
-    return (operator.caught = caught);
+function catchError(selector) {
+    return function catchErrorOperatorFunction(source) {
+        var operator = new CatchOperator(selector);
+        var caught = source.lift(operator);
+        return (operator.caught = caught);
+    };
 }
-exports._catch = _catch;
+exports.catchError = catchError;
 var CatchOperator = (function () {
     function CatchOperator(selector) {
         this.selector = selector;
@@ -24199,55 +17907,15 @@ var CatchSubscriber = (function (_super) {
     return CatchSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],314:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],133:[function(require,module,exports){
 "use strict";
-var combineLatest_1 = require('./combineLatest');
-/**
- * Converts a higher-order Observable into a first-order Observable by waiting
- * for the outer Observable to complete, then applying {@link combineLatest}.
- *
- * <span class="informal">Flattens an Observable-of-Observables by applying
- * {@link combineLatest} when the Observable-of-Observables completes.</span>
- *
- * <img src="./img/combineAll.png" width="100%">
- *
- * Takes an Observable of Observables, and collects all Observables from it.
- * Once the outer Observable completes, it subscribes to all collected
- * Observables and combines their values using the {@link combineLatest}
- * strategy, such that:
- * - Every time an inner Observable emits, the output Observable emits.
- * - When the returned observable emits, it emits all of the latest values by:
- *   - If a `project` function is provided, it is called with each recent value
- *     from each inner Observable in whatever order they arrived, and the result
- *     of the `project` function is what is emitted by the output Observable.
- *   - If there is no `project` function, an array of all of the most recent
- *     values is emitted by the output Observable.
- *
- * @example <caption>Map two click events to a finite interval Observable, then apply combineAll</caption>
- * var clicks = Rx.Observable.fromEvent(document, 'click');
- * var higherOrder = clicks.map(ev =>
- *   Rx.Observable.interval(Math.random()*2000).take(3)
- * ).take(2);
- * var result = higherOrder.combineAll();
- * result.subscribe(x => console.log(x));
- *
- * @see {@link combineLatest}
- * @see {@link mergeAll}
- *
- * @param {function} [project] An optional function to map the most recent
- * values from each inner Observable into a new result. Takes each of the most
- * recent values from each collected inner Observable as arguments, in order.
- * @return {Observable} An Observable of projected results or arrays of recent
- * values.
- * @method combineAll
- * @owner Observable
- */
+var combineLatest_1 = require('../operators/combineLatest');
 function combineAll(project) {
-    return this.lift(new combineLatest_1.CombineLatestOperator(project));
+    return function (source) { return source.lift(new combineLatest_1.CombineLatestOperator(project)); };
 }
 exports.combineAll = combineAll;
 
-},{"./combineLatest":315}],315:[function(require,module,exports){
+},{"../operators/combineLatest":134}],134:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24317,8 +17985,7 @@ function combineLatest() {
     if (observables.length === 1 && isArray_1.isArray(observables[0])) {
         observables = observables[0].slice();
     }
-    observables.unshift(this);
-    return this.lift.call(new ArrayObservable_1.ArrayObservable(observables), new CombineLatestOperator(project));
+    return function (source) { return source.lift.call(new ArrayObservable_1.ArrayObservable([source].concat(observables)), new CombineLatestOperator(project)); };
 }
 exports.combineLatest = combineLatest;
 var CombineLatestOperator = (function () {
@@ -24400,12 +18067,11 @@ var CombineLatestSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.CombineLatestSubscriber = CombineLatestSubscriber;
 
-},{"../OuterSubscriber":116,"../observable/ArrayObservable":254,"../util/isArray":444,"../util/subscribeToResult":455}],316:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../observable/ArrayObservable":103,"../util/isArray":246,"../util/subscribeToResult":258}],135:[function(require,module,exports){
 "use strict";
-var Observable_1 = require('../Observable');
-var isScheduler_1 = require('../util/isScheduler');
-var ArrayObservable_1 = require('../observable/ArrayObservable');
-var mergeAll_1 = require('./mergeAll');
+var concat_1 = require('../observable/concat');
+var concat_2 = require('../observable/concat');
+exports.concatStatic = concat_2.concat;
 /* tslint:enable:max-line-length */
 /**
  * Creates an output Observable which sequentially emits all values from every
@@ -24461,124 +18127,13 @@ function concat() {
     for (var _i = 0; _i < arguments.length; _i++) {
         observables[_i - 0] = arguments[_i];
     }
-    return this.lift.call(concatStatic.apply(void 0, [this].concat(observables)));
+    return function (source) { return source.lift.call(concat_1.concat.apply(void 0, [source].concat(observables))); };
 }
 exports.concat = concat;
-/* tslint:enable:max-line-length */
-/**
- * Creates an output Observable which sequentially emits all values from given
- * Observable and then moves on to the next.
- *
- * <span class="informal">Concatenates multiple Observables together by
- * sequentially emitting their values, one Observable after the other.</span>
- *
- * <img src="./img/concat.png" width="100%">
- *
- * `concat` joins multiple Observables together, by subscribing to them one at a time and
- * merging their results into the output Observable. You can pass either an array of
- * Observables, or put them directly as arguments. Passing an empty array will result
- * in Observable that completes immediately.
- *
- * `concat` will subscribe to first input Observable and emit all its values, without
- * changing or affecting them in any way. When that Observable completes, it will
- * subscribe to then next Observable passed and, again, emit its values. This will be
- * repeated, until the operator runs out of Observables. When last input Observable completes,
- * `concat` will complete as well. At any given moment only one Observable passed to operator
- * emits values. If you would like to emit values from passed Observables concurrently, check out
- * {@link merge} instead, especially with optional `concurrent` parameter. As a matter of fact,
- * `concat` is an equivalent of `merge` operator with `concurrent` parameter set to `1`.
- *
- * Note that if some input Observable never completes, `concat` will also never complete
- * and Observables following the one that did not complete will never be subscribed. On the other
- * hand, if some Observable simply completes immediately after it is subscribed, it will be
- * invisible for `concat`, which will just move on to the next Observable.
- *
- * If any Observable in chain errors, instead of passing control to the next Observable,
- * `concat` will error immediately as well. Observables that would be subscribed after
- * the one that emitted error, never will.
- *
- * If you pass to `concat` the same Observable many times, its stream of values
- * will be "replayed" on every subscription, which means you can repeat given Observable
- * as many times as you like. If passing the same Observable to `concat` 1000 times becomes tedious,
- * you can always use {@link repeat}.
- *
- * @example <caption>Concatenate a timer counting from 0 to 3 with a synchronous sequence from 1 to 10</caption>
- * var timer = Rx.Observable.interval(1000).take(4);
- * var sequence = Rx.Observable.range(1, 10);
- * var result = Rx.Observable.concat(timer, sequence);
- * result.subscribe(x => console.log(x));
- *
- * // results in:
- * // 0 -1000ms-> 1 -1000ms-> 2 -1000ms-> 3 -immediate-> 1 ... 10
- *
- *
- * @example <caption>Concatenate an array of 3 Observables</caption>
- * var timer1 = Rx.Observable.interval(1000).take(10);
- * var timer2 = Rx.Observable.interval(2000).take(6);
- * var timer3 = Rx.Observable.interval(500).take(10);
- * var result = Rx.Observable.concat([timer1, timer2, timer3]); // note that array is passed
- * result.subscribe(x => console.log(x));
- *
- * // results in the following:
- * // (Prints to console sequentially)
- * // -1000ms-> 0 -1000ms-> 1 -1000ms-> ... 9
- * // -2000ms-> 0 -2000ms-> 1 -2000ms-> ... 5
- * // -500ms-> 0 -500ms-> 1 -500ms-> ... 9
- *
- *
- * @example <caption>Concatenate the same Observable to repeat it</caption>
- * const timer = Rx.Observable.interval(1000).take(2);
- *
- * Rx.Observable.concat(timer, timer) // concating the same Observable!
- * .subscribe(
- *   value => console.log(value),
- *   err => {},
- *   () => console.log('...and it is done!')
- * );
- *
- * // Logs:
- * // 0 after 1s
- * // 1 after 2s
- * // 0 after 3s
- * // 1 after 4s
- * // "...and it is done!" also after 4s
- *
- * @see {@link concatAll}
- * @see {@link concatMap}
- * @see {@link concatMapTo}
- *
- * @param {ObservableInput} input1 An input Observable to concatenate with others.
- * @param {ObservableInput} input2 An input Observable to concatenate with others.
- * More than one input Observables may be given as argument.
- * @param {Scheduler} [scheduler=null] An optional IScheduler to schedule each
- * Observable subscription on.
- * @return {Observable} All values of each passed Observable merged into a
- * single Observable, in order, in serial fashion.
- * @static true
- * @name concat
- * @owner Observable
- */
-function concatStatic() {
-    var observables = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-        observables[_i - 0] = arguments[_i];
-    }
-    var scheduler = null;
-    var args = observables;
-    if (isScheduler_1.isScheduler(args[observables.length - 1])) {
-        scheduler = args.pop();
-    }
-    if (scheduler === null && observables.length === 1 && observables[0] instanceof Observable_1.Observable) {
-        return observables[0];
-    }
-    return new ArrayObservable_1.ArrayObservable(observables, scheduler).lift(new mergeAll_1.MergeAllOperator(1));
-}
-exports.concatStatic = concatStatic;
 
-},{"../Observable":114,"../observable/ArrayObservable":254,"../util/isScheduler":451,"./mergeAll":351}],317:[function(require,module,exports){
+},{"../observable/concat":112}],136:[function(require,module,exports){
 "use strict";
 var mergeAll_1 = require('./mergeAll');
-/* tslint:enable:max-line-length */
 /**
  * Converts a higher-order Observable into a first-order Observable by
  * concatenating the inner Observables in order.
@@ -24628,11 +18183,11 @@ var mergeAll_1 = require('./mergeAll');
  * @owner Observable
  */
 function concatAll() {
-    return this.lift(new mergeAll_1.MergeAllOperator(1));
+    return mergeAll_1.mergeAll(1);
 }
 exports.concatAll = concatAll;
 
-},{"./mergeAll":351}],318:[function(require,module,exports){
+},{"./mergeAll":168}],137:[function(require,module,exports){
 "use strict";
 var mergeMap_1 = require('./mergeMap');
 /* tslint:enable:max-line-length */
@@ -24696,13 +18251,13 @@ var mergeMap_1 = require('./mergeMap');
  * @owner Observable
  */
 function concatMap(project, resultSelector) {
-    return this.lift(new mergeMap_1.MergeMapOperator(project, resultSelector, 1));
+    return mergeMap_1.mergeMap(project, resultSelector, 1);
 }
 exports.concatMap = concatMap;
 
-},{"./mergeMap":352}],319:[function(require,module,exports){
+},{"./mergeMap":169}],138:[function(require,module,exports){
 "use strict";
-var mergeMapTo_1 = require('./mergeMapTo');
+var concatMap_1 = require('./concatMap');
 /* tslint:enable:max-line-length */
 /**
  * Projects each source value to the same Observable which is merged multiple
@@ -24761,11 +18316,11 @@ var mergeMapTo_1 = require('./mergeMapTo');
  * @owner Observable
  */
 function concatMapTo(innerObservable, resultSelector) {
-    return this.lift(new mergeMapTo_1.MergeMapToOperator(innerObservable, resultSelector, 1));
+    return concatMap_1.concatMap(function () { return innerObservable; }, resultSelector);
 }
 exports.concatMapTo = concatMapTo;
 
-},{"./mergeMapTo":353}],320:[function(require,module,exports){
+},{"./concatMap":137}],139:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24822,7 +18377,7 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function count(predicate) {
-    return this.lift(new CountOperator(predicate, this));
+    return function (source) { return source.lift(new CountOperator(predicate, source)); };
 }
 exports.count = count;
 var CountOperator = (function () {
@@ -24877,7 +18432,7 @@ var CountSubscriber = (function (_super) {
     return CountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],321:[function(require,module,exports){
+},{"../Subscriber":97}],140:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24929,7 +18484,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function debounce(durationSelector) {
-    return this.lift(new DebounceOperator(durationSelector));
+    return function (source) { return source.lift(new DebounceOperator(durationSelector)); };
 }
 exports.debounce = debounce;
 var DebounceOperator = (function () {
@@ -25005,7 +18560,7 @@ var DebounceSubscriber = (function (_super) {
     return DebounceSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],322:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],141:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25062,7 +18617,7 @@ var async_1 = require('../scheduler/async');
  */
 function debounceTime(dueTime, scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
-    return this.lift(new DebounceTimeOperator(dueTime, scheduler));
+    return function (source) { return source.lift(new DebounceTimeOperator(dueTime, scheduler)); };
 }
 exports.debounceTime = debounceTime;
 var DebounceTimeOperator = (function () {
@@ -25122,7 +18677,7 @@ function dispatchNext(subscriber) {
     subscriber.debouncedNext();
 }
 
-},{"../Subscriber":122,"../scheduler/async":420}],323:[function(require,module,exports){
+},{"../Subscriber":97,"../scheduler/async":230}],142:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25163,7 +18718,7 @@ var Subscriber_1 = require('../Subscriber');
  */
 function defaultIfEmpty(defaultValue) {
     if (defaultValue === void 0) { defaultValue = null; }
-    return this.lift(new DefaultIfEmptyOperator(defaultValue));
+    return function (source) { return source.lift(new DefaultIfEmptyOperator(defaultValue)); };
 }
 exports.defaultIfEmpty = defaultIfEmpty;
 var DefaultIfEmptyOperator = (function () {
@@ -25200,7 +18755,7 @@ var DefaultIfEmptySubscriber = (function (_super) {
     return DefaultIfEmptySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],324:[function(require,module,exports){
+},{"../Subscriber":97}],143:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25254,7 +18809,7 @@ function delay(delay, scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
     var absoluteDelay = isDate_1.isDate(delay);
     var delayFor = absoluteDelay ? (+delay - scheduler.now()) : Math.abs(delay);
-    return this.lift(new DelayOperator(delayFor, scheduler));
+    return function (source) { return source.lift(new DelayOperator(delayFor, scheduler)); };
 }
 exports.delay = delay;
 var DelayOperator = (function () {
@@ -25336,7 +18891,7 @@ var DelayMessage = (function () {
     return DelayMessage;
 }());
 
-},{"../Notification":113,"../Subscriber":122,"../scheduler/async":420,"../util/isDate":446}],325:[function(require,module,exports){
+},{"../Notification":89,"../Subscriber":97,"../scheduler/async":230,"../util/isDate":248}],144:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25394,10 +18949,12 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  */
 function delayWhen(delayDurationSelector, subscriptionDelay) {
     if (subscriptionDelay) {
-        return new SubscriptionDelayObservable(this, subscriptionDelay)
-            .lift(new DelayWhenOperator(delayDurationSelector));
+        return function (source) {
+            return new SubscriptionDelayObservable(source, subscriptionDelay)
+                .lift(new DelayWhenOperator(delayDurationSelector));
+        };
     }
-    return this.lift(new DelayWhenOperator(delayDurationSelector));
+    return function (source) { return source.lift(new DelayWhenOperator(delayDurationSelector)); };
 }
 exports.delayWhen = delayWhen;
 var DelayWhenOperator = (function () {
@@ -25529,7 +19086,7 @@ var SubscriptionDelaySubscriber = (function (_super) {
     return SubscriptionDelaySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Observable":114,"../OuterSubscriber":116,"../Subscriber":122,"../util/subscribeToResult":455}],326:[function(require,module,exports){
+},{"../Observable":90,"../OuterSubscriber":92,"../Subscriber":97,"../util/subscribeToResult":258}],145:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25578,7 +19135,9 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function dematerialize() {
-    return this.lift(new DeMaterializeOperator());
+    return function dematerializeOperatorFunction(source) {
+        return source.lift(new DeMaterializeOperator());
+    };
 }
 exports.dematerialize = dematerialize;
 var DeMaterializeOperator = (function () {
@@ -25605,7 +19164,7 @@ var DeMaterializeSubscriber = (function (_super) {
     return DeMaterializeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],327:[function(require,module,exports){
+},{"../Subscriber":97}],146:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25661,7 +19220,7 @@ var Set_1 = require('../util/Set');
  * @owner Observable
  */
 function distinct(keySelector, flushes) {
-    return this.lift(new DistinctOperator(keySelector, flushes));
+    return function (source) { return source.lift(new DistinctOperator(keySelector, flushes)); };
 }
 exports.distinct = distinct;
 var DistinctOperator = (function () {
@@ -25726,7 +19285,7 @@ var DistinctSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.DistinctSubscriber = DistinctSubscriber;
 
-},{"../OuterSubscriber":116,"../util/Set":438,"../util/subscribeToResult":455}],328:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/Set":241,"../util/subscribeToResult":258}],147:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25777,7 +19336,7 @@ var errorObject_1 = require('../util/errorObject');
  * @owner Observable
  */
 function distinctUntilChanged(compare, keySelector) {
-    return this.lift(new DistinctUntilChangedOperator(compare, keySelector));
+    return function (source) { return source.lift(new DistinctUntilChangedOperator(compare, keySelector)); };
 }
 exports.distinctUntilChanged = distinctUntilChanged;
 var DistinctUntilChangedOperator = (function () {
@@ -25835,7 +19394,7 @@ var DistinctUntilChangedSubscriber = (function (_super) {
     return DistinctUntilChangedSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/errorObject":443,"../util/tryCatch":457}],329:[function(require,module,exports){
+},{"../Subscriber":97,"../util/errorObject":244,"../util/tryCatch":260}],148:[function(require,module,exports){
 "use strict";
 var distinctUntilChanged_1 = require('./distinctUntilChanged');
 /* tslint:enable:max-line-length */
@@ -25897,130 +19456,11 @@ var distinctUntilChanged_1 = require('./distinctUntilChanged');
  * @owner Observable
  */
 function distinctUntilKeyChanged(key, compare) {
-    return distinctUntilChanged_1.distinctUntilChanged.call(this, function (x, y) {
-        if (compare) {
-            return compare(x[key], y[key]);
-        }
-        return x[key] === y[key];
-    });
+    return distinctUntilChanged_1.distinctUntilChanged(function (x, y) { return compare ? compare(x[key], y[key]) : x[key] === y[key]; });
 }
 exports.distinctUntilKeyChanged = distinctUntilKeyChanged;
 
-},{"./distinctUntilChanged":328}],330:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Subscriber_1 = require('../Subscriber');
-/* tslint:enable:max-line-length */
-/**
- * Perform a side effect for every emission on the source Observable, but return
- * an Observable that is identical to the source.
- *
- * <span class="informal">Intercepts each emission on the source and runs a
- * function, but returns an output which is identical to the source as long as errors don't occur.</span>
- *
- * <img src="./img/do.png" width="100%">
- *
- * Returns a mirrored Observable of the source Observable, but modified so that
- * the provided Observer is called to perform a side effect for every value,
- * error, and completion emitted by the source. Any errors that are thrown in
- * the aforementioned Observer or handlers are safely sent down the error path
- * of the output Observable.
- *
- * This operator is useful for debugging your Observables for the correct values
- * or performing other side effects.
- *
- * Note: this is different to a `subscribe` on the Observable. If the Observable
- * returned by `do` is not subscribed, the side effects specified by the
- * Observer will never happen. `do` therefore simply spies on existing
- * execution, it does not trigger an execution to happen like `subscribe` does.
- *
- * @example <caption>Map every click to the clientX position of that click, while also logging the click event</caption>
- * var clicks = Rx.Observable.fromEvent(document, 'click');
- * var positions = clicks
- *   .do(ev => console.log(ev))
- *   .map(ev => ev.clientX);
- * positions.subscribe(x => console.log(x));
- *
- * @see {@link map}
- * @see {@link subscribe}
- *
- * @param {Observer|function} [nextOrObserver] A normal Observer object or a
- * callback for `next`.
- * @param {function} [error] Callback for errors in the source.
- * @param {function} [complete] Callback for the completion of the source.
- * @return {Observable} An Observable identical to the source, but runs the
- * specified Observer or callback(s) for each item.
- * @method do
- * @name do
- * @owner Observable
- */
-function _do(nextOrObserver, error, complete) {
-    return this.lift(new DoOperator(nextOrObserver, error, complete));
-}
-exports._do = _do;
-var DoOperator = (function () {
-    function DoOperator(nextOrObserver, error, complete) {
-        this.nextOrObserver = nextOrObserver;
-        this.error = error;
-        this.complete = complete;
-    }
-    DoOperator.prototype.call = function (subscriber, source) {
-        return source.subscribe(new DoSubscriber(subscriber, this.nextOrObserver, this.error, this.complete));
-    };
-    return DoOperator;
-}());
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var DoSubscriber = (function (_super) {
-    __extends(DoSubscriber, _super);
-    function DoSubscriber(destination, nextOrObserver, error, complete) {
-        _super.call(this, destination);
-        var safeSubscriber = new Subscriber_1.Subscriber(nextOrObserver, error, complete);
-        safeSubscriber.syncErrorThrowable = true;
-        this.add(safeSubscriber);
-        this.safeSubscriber = safeSubscriber;
-    }
-    DoSubscriber.prototype._next = function (value) {
-        var safeSubscriber = this.safeSubscriber;
-        safeSubscriber.next(value);
-        if (safeSubscriber.syncErrorThrown) {
-            this.destination.error(safeSubscriber.syncErrorValue);
-        }
-        else {
-            this.destination.next(value);
-        }
-    };
-    DoSubscriber.prototype._error = function (err) {
-        var safeSubscriber = this.safeSubscriber;
-        safeSubscriber.error(err);
-        if (safeSubscriber.syncErrorThrown) {
-            this.destination.error(safeSubscriber.syncErrorValue);
-        }
-        else {
-            this.destination.error(err);
-        }
-    };
-    DoSubscriber.prototype._complete = function () {
-        var safeSubscriber = this.safeSubscriber;
-        safeSubscriber.complete();
-        if (safeSubscriber.syncErrorThrown) {
-            this.destination.error(safeSubscriber.syncErrorValue);
-        }
-        else {
-            this.destination.complete();
-        }
-    };
-    return DoSubscriber;
-}(Subscriber_1.Subscriber));
-
-},{"../Subscriber":122}],331:[function(require,module,exports){
+},{"./distinctUntilChanged":147}],149:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26072,7 +19512,7 @@ var ArgumentOutOfRangeError_1 = require('../util/ArgumentOutOfRangeError');
  * @owner Observable
  */
 function elementAt(index, defaultValue) {
-    return this.lift(new ElementAtOperator(index, defaultValue));
+    return function (source) { return source.lift(new ElementAtOperator(index, defaultValue)); };
 }
 exports.elementAt = elementAt;
 var ElementAtOperator = (function () {
@@ -26121,7 +19561,7 @@ var ElementAtSubscriber = (function (_super) {
     return ElementAtSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/ArgumentOutOfRangeError":431}],332:[function(require,module,exports){
+},{"../Subscriber":97,"../util/ArgumentOutOfRangeError":235}],150:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26144,7 +19584,7 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function every(predicate, thisArg) {
-    return this.lift(new EveryOperator(predicate, thisArg, this));
+    return function (source) { return source.lift(new EveryOperator(predicate, thisArg, source)); };
 }
 exports.every = every;
 var EveryOperator = (function () {
@@ -26196,7 +19636,7 @@ var EverySubscriber = (function (_super) {
     return EverySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],333:[function(require,module,exports){
+},{"../Subscriber":97}],151:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26241,7 +19681,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function exhaust() {
-    return this.lift(new SwitchFirstOperator());
+    return function (source) { return source.lift(new SwitchFirstOperator()); };
 }
 exports.exhaust = exhaust;
 var SwitchFirstOperator = (function () {
@@ -26286,7 +19726,7 @@ var SwitchFirstSubscriber = (function (_super) {
     return SwitchFirstSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],334:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],152:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26342,7 +19782,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function exhaustMap(project, resultSelector) {
-    return this.lift(new SwitchFirstMapOperator(project, resultSelector));
+    return function (source) { return source.lift(new SwitchFirstMapOperator(project, resultSelector)); };
 }
 exports.exhaustMap = exhaustMap;
 var SwitchFirstMapOperator = (function () {
@@ -26425,7 +19865,7 @@ var SwitchFirstMapSubscriber = (function (_super) {
     return SwitchFirstMapSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],335:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],153:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26486,7 +19926,7 @@ function expand(project, concurrent, scheduler) {
     if (concurrent === void 0) { concurrent = Number.POSITIVE_INFINITY; }
     if (scheduler === void 0) { scheduler = undefined; }
     concurrent = (concurrent || 0) < 1 ? Number.POSITIVE_INFINITY : concurrent;
-    return this.lift(new ExpandOperator(project, concurrent, scheduler));
+    return function (source) { return source.lift(new ExpandOperator(project, concurrent, scheduler)); };
 }
 exports.expand = expand;
 var ExpandOperator = (function () {
@@ -26577,7 +20017,7 @@ var ExpandSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.ExpandSubscriber = ExpandSubscriber;
 
-},{"../OuterSubscriber":116,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],336:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],154:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26626,7 +20066,9 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function filter(predicate, thisArg) {
-    return this.lift(new FilterOperator(predicate, thisArg));
+    return function filterOperatorFunction(source) {
+        return source.lift(new FilterOperator(predicate, thisArg));
+    };
 }
 exports.filter = filter;
 var FilterOperator = (function () {
@@ -26670,7 +20112,7 @@ var FilterSubscriber = (function (_super) {
     return FilterSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],337:[function(require,module,exports){
+},{"../Subscriber":97}],155:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26687,10 +20129,10 @@ var Subscription_1 = require('../Subscription');
  * @method finally
  * @owner Observable
  */
-function _finally(callback) {
-    return this.lift(new FinallyOperator(callback));
+function finalize(callback) {
+    return function (source) { return source.lift(new FinallyOperator(callback)); };
 }
-exports._finally = _finally;
+exports.finalize = finalize;
 var FinallyOperator = (function () {
     function FinallyOperator(callback) {
         this.callback = callback;
@@ -26714,7 +20156,7 @@ var FinallySubscriber = (function (_super) {
     return FinallySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../Subscription":123}],338:[function(require,module,exports){
+},{"../Subscriber":97,"../Subscription":98}],156:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26722,7 +20164,6 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
 var Subscriber_1 = require('../Subscriber');
-/* tslint:enable:max-line-length */
 /**
  * Emits only the first value emitted by the source Observable that meets some
  * condition.
@@ -26760,7 +20201,7 @@ function find(predicate, thisArg) {
     if (typeof predicate !== 'function') {
         throw new TypeError('predicate is not a function');
     }
-    return this.lift(new FindValueOperator(predicate, this, false, thisArg));
+    return function (source) { return source.lift(new FindValueOperator(predicate, source, false, thisArg)); };
 }
 exports.find = find;
 var FindValueOperator = (function () {
@@ -26816,9 +20257,9 @@ var FindValueSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.FindValueSubscriber = FindValueSubscriber;
 
-},{"../Subscriber":122}],339:[function(require,module,exports){
+},{"../Subscriber":97}],157:[function(require,module,exports){
 "use strict";
-var find_1 = require('./find');
+var find_1 = require('../operators/find');
 /**
  * Emits only the index of the first value emitted by the source Observable that
  * meets some condition.
@@ -26854,11 +20295,11 @@ var find_1 = require('./find');
  * @owner Observable
  */
 function findIndex(predicate, thisArg) {
-    return this.lift(new find_1.FindValueOperator(predicate, this, true, thisArg));
+    return function (source) { return source.lift(new find_1.FindValueOperator(predicate, source, true, thisArg)); };
 }
 exports.findIndex = findIndex;
 
-},{"./find":338}],340:[function(require,module,exports){
+},{"../operators/find":156}],158:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26917,7 +20358,7 @@ var EmptyError_1 = require('../util/EmptyError');
  * @owner Observable
  */
 function first(predicate, resultSelector, defaultValue) {
-    return this.lift(new FirstOperator(predicate, resultSelector, defaultValue, this));
+    return function (source) { return source.lift(new FirstOperator(predicate, resultSelector, defaultValue, source)); };
 }
 exports.first = first;
 var FirstOperator = (function () {
@@ -27011,7 +20452,7 @@ var FirstSubscriber = (function (_super) {
     return FirstSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/EmptyError":432}],341:[function(require,module,exports){
+},{"../Subscriber":97,"../util/EmptyError":236}],159:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27093,7 +20534,9 @@ var FastMap_1 = require('../util/FastMap');
  * @owner Observable
  */
 function groupBy(keySelector, elementSelector, durationSelector, subjectSelector) {
-    return this.lift(new GroupByOperator(keySelector, elementSelector, durationSelector, subjectSelector));
+    return function (source) {
+        return source.lift(new GroupByOperator(keySelector, elementSelector, durationSelector, subjectSelector));
+    };
 }
 exports.groupBy = groupBy;
 var GroupByOperator = (function () {
@@ -27286,7 +20729,7 @@ var InnerRefCountSubscription = (function (_super) {
     return InnerRefCountSubscription;
 }(Subscription_1.Subscription));
 
-},{"../Observable":114,"../Subject":120,"../Subscriber":122,"../Subscription":123,"../util/FastMap":433,"../util/Map":435}],342:[function(require,module,exports){
+},{"../Observable":90,"../Subject":95,"../Subscriber":97,"../Subscription":98,"../util/FastMap":237,"../util/Map":238}],160:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27306,10 +20749,11 @@ var noop_1 = require('../util/noop');
  * @owner Observable
  */
 function ignoreElements() {
-    return this.lift(new IgnoreElementsOperator());
+    return function ignoreElementsOperatorFunction(source) {
+        return source.lift(new IgnoreElementsOperator());
+    };
 }
 exports.ignoreElements = ignoreElements;
-;
 var IgnoreElementsOperator = (function () {
     function IgnoreElementsOperator() {
     }
@@ -27334,7 +20778,7 @@ var IgnoreElementsSubscriber = (function (_super) {
     return IgnoreElementsSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/noop":452}],343:[function(require,module,exports){
+},{"../Subscriber":97,"../util/noop":254}],161:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27342,17 +20786,8 @@ var __extends = (this && this.__extends) || function (d, b) {
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
 var Subscriber_1 = require('../Subscriber');
-/**
- * If the source Observable is empty it returns an Observable that emits true, otherwise it emits false.
- *
- * <img src="./img/isEmpty.png" width="100%">
- *
- * @return {Observable} An Observable that emits a Boolean.
- * @method isEmpty
- * @owner Observable
- */
 function isEmpty() {
-    return this.lift(new IsEmptyOperator());
+    return function (source) { return source.lift(new IsEmptyOperator()); };
 }
 exports.isEmpty = isEmpty;
 var IsEmptyOperator = (function () {
@@ -27387,7 +20822,7 @@ var IsEmptySubscriber = (function (_super) {
     return IsEmptySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],344:[function(require,module,exports){
+},{"../Subscriber":97}],162:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27415,7 +20850,7 @@ var EmptyError_1 = require('../util/EmptyError');
  * @owner Observable
  */
 function last(predicate, resultSelector, defaultValue) {
-    return this.lift(new LastOperator(predicate, resultSelector, defaultValue, this));
+    return function (source) { return source.lift(new LastOperator(predicate, resultSelector, defaultValue, source)); };
 }
 exports.last = last;
 var LastOperator = (function () {
@@ -27507,20 +20942,7 @@ var LastSubscriber = (function (_super) {
     return LastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/EmptyError":432}],345:[function(require,module,exports){
-"use strict";
-/**
- * @param func
- * @return {Observable<R>}
- * @method let
- * @owner Observable
- */
-function letProto(func) {
-    return func(this);
-}
-exports.letProto = letProto;
-
-},{}],346:[function(require,module,exports){
+},{"../Subscriber":97,"../util/EmptyError":236}],163:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27562,10 +20984,12 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function map(project, thisArg) {
-    if (typeof project !== 'function') {
-        throw new TypeError('argument is not a function. Are you looking for `mapTo()`?');
-    }
-    return this.lift(new MapOperator(project, thisArg));
+    return function mapOperation(source) {
+        if (typeof project !== 'function') {
+            throw new TypeError('argument is not a function. Are you looking for `mapTo()`?');
+        }
+        return source.lift(new MapOperator(project, thisArg));
+    };
 }
 exports.map = map;
 var MapOperator = (function () {
@@ -27608,7 +21032,7 @@ var MapSubscriber = (function (_super) {
     return MapSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],347:[function(require,module,exports){
+},{"../Subscriber":97}],164:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27643,7 +21067,7 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function mapTo(value) {
-    return this.lift(new MapToOperator(value));
+    return function (source) { return source.lift(new MapToOperator(value)); };
 }
 exports.mapTo = mapTo;
 var MapToOperator = (function () {
@@ -27672,7 +21096,7 @@ var MapToSubscriber = (function (_super) {
     return MapToSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],348:[function(require,module,exports){
+},{"../Subscriber":97}],165:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27726,7 +21150,9 @@ var Notification_1 = require('../Notification');
  * @owner Observable
  */
 function materialize() {
-    return this.lift(new MaterializeOperator());
+    return function materializeOperatorFunction(source) {
+        return source.lift(new MaterializeOperator());
+    };
 }
 exports.materialize = materialize;
 var MaterializeOperator = (function () {
@@ -27763,7 +21189,7 @@ var MaterializeSubscriber = (function (_super) {
     return MaterializeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Notification":113,"../Subscriber":122}],349:[function(require,module,exports){
+},{"../Notification":89,"../Subscriber":97}],166:[function(require,module,exports){
 "use strict";
 var reduce_1 = require('./reduce');
 /**
@@ -27801,16 +21227,15 @@ function max(comparer) {
     var max = (typeof comparer === 'function')
         ? function (x, y) { return comparer(x, y) > 0 ? x : y; }
         : function (x, y) { return x > y ? x : y; };
-    return this.lift(new reduce_1.ReduceOperator(max));
+    return reduce_1.reduce(max);
 }
 exports.max = max;
 
-},{"./reduce":367}],350:[function(require,module,exports){
+},{"./reduce":184}],167:[function(require,module,exports){
 "use strict";
-var Observable_1 = require('../Observable');
-var ArrayObservable_1 = require('../observable/ArrayObservable');
-var mergeAll_1 = require('./mergeAll');
-var isScheduler_1 = require('../util/isScheduler');
+var merge_1 = require('../observable/merge');
+var merge_2 = require('../observable/merge');
+exports.mergeStatic = merge_2.merge;
 /* tslint:enable:max-line-length */
 /**
  * Creates an output Observable which concurrently emits all values from every
@@ -27863,103 +21288,14 @@ function merge() {
     for (var _i = 0; _i < arguments.length; _i++) {
         observables[_i - 0] = arguments[_i];
     }
-    return this.lift.call(mergeStatic.apply(void 0, [this].concat(observables)));
+    return function (source) { return source.lift.call(merge_1.merge.apply(void 0, [source].concat(observables))); };
 }
 exports.merge = merge;
-/* tslint:enable:max-line-length */
-/**
- * Creates an output Observable which concurrently emits all values from every
- * given input Observable.
- *
- * <span class="informal">Flattens multiple Observables together by blending
- * their values into one Observable.</span>
- *
- * <img src="./img/merge.png" width="100%">
- *
- * `merge` subscribes to each given input Observable (as arguments), and simply
- * forwards (without doing any transformation) all the values from all the input
- * Observables to the output Observable. The output Observable only completes
- * once all input Observables have completed. Any error delivered by an input
- * Observable will be immediately emitted on the output Observable.
- *
- * @example <caption>Merge together two Observables: 1s interval and clicks</caption>
- * var clicks = Rx.Observable.fromEvent(document, 'click');
- * var timer = Rx.Observable.interval(1000);
- * var clicksOrTimer = Rx.Observable.merge(clicks, timer);
- * clicksOrTimer.subscribe(x => console.log(x));
- *
- * // Results in the following:
- * // timer will emit ascending values, one every second(1000ms) to console
- * // clicks logs MouseEvents to console everytime the "document" is clicked
- * // Since the two streams are merged you see these happening
- * // as they occur.
- *
- * @example <caption>Merge together 3 Observables, but only 2 run concurrently</caption>
- * var timer1 = Rx.Observable.interval(1000).take(10);
- * var timer2 = Rx.Observable.interval(2000).take(6);
- * var timer3 = Rx.Observable.interval(500).take(10);
- * var concurrent = 2; // the argument
- * var merged = Rx.Observable.merge(timer1, timer2, timer3, concurrent);
- * merged.subscribe(x => console.log(x));
- *
- * // Results in the following:
- * // - First timer1 and timer2 will run concurrently
- * // - timer1 will emit a value every 1000ms for 10 iterations
- * // - timer2 will emit a value every 2000ms for 6 iterations
- * // - after timer1 hits it's max iteration, timer2 will
- * //   continue, and timer3 will start to run concurrently with timer2
- * // - when timer2 hits it's max iteration it terminates, and
- * //   timer3 will continue to emit a value every 500ms until it is complete
- *
- * @see {@link mergeAll}
- * @see {@link mergeMap}
- * @see {@link mergeMapTo}
- * @see {@link mergeScan}
- *
- * @param {...ObservableInput} observables Input Observables to merge together.
- * @param {number} [concurrent=Number.POSITIVE_INFINITY] Maximum number of input
- * Observables being subscribed to concurrently.
- * @param {Scheduler} [scheduler=null] The IScheduler to use for managing
- * concurrency of input Observables.
- * @return {Observable} an Observable that emits items that are the result of
- * every input Observable.
- * @static true
- * @name merge
- * @owner Observable
- */
-function mergeStatic() {
-    var observables = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-        observables[_i - 0] = arguments[_i];
-    }
-    var concurrent = Number.POSITIVE_INFINITY;
-    var scheduler = null;
-    var last = observables[observables.length - 1];
-    if (isScheduler_1.isScheduler(last)) {
-        scheduler = observables.pop();
-        if (observables.length > 1 && typeof observables[observables.length - 1] === 'number') {
-            concurrent = observables.pop();
-        }
-    }
-    else if (typeof last === 'number') {
-        concurrent = observables.pop();
-    }
-    if (scheduler === null && observables.length === 1 && observables[0] instanceof Observable_1.Observable) {
-        return observables[0];
-    }
-    return new ArrayObservable_1.ArrayObservable(observables, scheduler).lift(new mergeAll_1.MergeAllOperator(concurrent));
-}
-exports.mergeStatic = mergeStatic;
 
-},{"../Observable":114,"../observable/ArrayObservable":254,"../util/isScheduler":451,"./mergeAll":351}],351:[function(require,module,exports){
+},{"../observable/merge":116}],168:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var OuterSubscriber_1 = require('../OuterSubscriber');
-var subscribeToResult_1 = require('../util/subscribeToResult');
+var mergeMap_1 = require('./mergeMap');
+var identity_1 = require('../util/identity');
 /**
  * Converts a higher-order Observable into a first-order Observable which
  * concurrently delivers all values that are emitted on the inner Observables.
@@ -28006,64 +21342,11 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  */
 function mergeAll(concurrent) {
     if (concurrent === void 0) { concurrent = Number.POSITIVE_INFINITY; }
-    return this.lift(new MergeAllOperator(concurrent));
+    return mergeMap_1.mergeMap(identity_1.identity, null, concurrent);
 }
 exports.mergeAll = mergeAll;
-var MergeAllOperator = (function () {
-    function MergeAllOperator(concurrent) {
-        this.concurrent = concurrent;
-    }
-    MergeAllOperator.prototype.call = function (observer, source) {
-        return source.subscribe(new MergeAllSubscriber(observer, this.concurrent));
-    };
-    return MergeAllOperator;
-}());
-exports.MergeAllOperator = MergeAllOperator;
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var MergeAllSubscriber = (function (_super) {
-    __extends(MergeAllSubscriber, _super);
-    function MergeAllSubscriber(destination, concurrent) {
-        _super.call(this, destination);
-        this.concurrent = concurrent;
-        this.hasCompleted = false;
-        this.buffer = [];
-        this.active = 0;
-    }
-    MergeAllSubscriber.prototype._next = function (observable) {
-        if (this.active < this.concurrent) {
-            this.active++;
-            this.add(subscribeToResult_1.subscribeToResult(this, observable));
-        }
-        else {
-            this.buffer.push(observable);
-        }
-    };
-    MergeAllSubscriber.prototype._complete = function () {
-        this.hasCompleted = true;
-        if (this.active === 0 && this.buffer.length === 0) {
-            this.destination.complete();
-        }
-    };
-    MergeAllSubscriber.prototype.notifyComplete = function (innerSub) {
-        var buffer = this.buffer;
-        this.remove(innerSub);
-        this.active--;
-        if (buffer.length > 0) {
-            this._next(buffer.shift());
-        }
-        else if (this.active === 0 && this.hasCompleted) {
-            this.destination.complete();
-        }
-    };
-    return MergeAllSubscriber;
-}(OuterSubscriber_1.OuterSubscriber));
-exports.MergeAllSubscriber = MergeAllSubscriber;
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],352:[function(require,module,exports){
+},{"../util/identity":245,"./mergeMap":169}],169:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28133,11 +21416,13 @@ var OuterSubscriber_1 = require('../OuterSubscriber');
  */
 function mergeMap(project, resultSelector, concurrent) {
     if (concurrent === void 0) { concurrent = Number.POSITIVE_INFINITY; }
-    if (typeof resultSelector === 'number') {
-        concurrent = resultSelector;
-        resultSelector = null;
-    }
-    return this.lift(new MergeMapOperator(project, resultSelector, concurrent));
+    return function mergeMapOperatorFunction(source) {
+        if (typeof resultSelector === 'number') {
+            concurrent = resultSelector;
+            resultSelector = null;
+        }
+        return source.lift(new MergeMapOperator(project, resultSelector, concurrent));
+    };
 }
 exports.mergeMap = mergeMap;
 var MergeMapOperator = (function () {
@@ -28235,7 +21520,7 @@ var MergeMapSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeMapSubscriber = MergeMapSubscriber;
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],353:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],170:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28294,7 +21579,7 @@ function mergeMapTo(innerObservable, resultSelector, concurrent) {
         concurrent = resultSelector;
         resultSelector = null;
     }
-    return this.lift(new MergeMapToOperator(innerObservable, resultSelector, concurrent));
+    return function (source) { return source.lift(new MergeMapToOperator(innerObservable, resultSelector, concurrent)); };
 }
 exports.mergeMapTo = mergeMapTo;
 // TODO: Figure out correct signature here: an Operator<Observable<T>, R>
@@ -28391,7 +21676,7 @@ var MergeMapToSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeMapToSubscriber = MergeMapToSubscriber;
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],354:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],171:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28435,7 +21720,7 @@ var OuterSubscriber_1 = require('../OuterSubscriber');
  */
 function mergeScan(accumulator, seed, concurrent) {
     if (concurrent === void 0) { concurrent = Number.POSITIVE_INFINITY; }
-    return this.lift(new MergeScanOperator(accumulator, seed, concurrent));
+    return function (source) { return source.lift(new MergeScanOperator(accumulator, seed, concurrent)); };
 }
 exports.mergeScan = mergeScan;
 var MergeScanOperator = (function () {
@@ -28521,7 +21806,7 @@ var MergeScanSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeScanSubscriber = MergeScanSubscriber;
 
-},{"../OuterSubscriber":116,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],355:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],172:[function(require,module,exports){
 "use strict";
 var reduce_1 = require('./reduce');
 /**
@@ -28559,11 +21844,11 @@ function min(comparer) {
     var min = (typeof comparer === 'function')
         ? function (x, y) { return comparer(x, y) < 0 ? x : y; }
         : function (x, y) { return x < y ? x : y; };
-    return this.lift(new reduce_1.ReduceOperator(min));
+    return reduce_1.reduce(min);
 }
 exports.min = min;
 
-},{"./reduce":367}],356:[function(require,module,exports){
+},{"./reduce":184}],173:[function(require,module,exports){
 "use strict";
 var ConnectableObservable_1 = require('../observable/ConnectableObservable');
 /* tslint:enable:max-line-length */
@@ -28587,22 +21872,24 @@ var ConnectableObservable_1 = require('../observable/ConnectableObservable');
  * @owner Observable
  */
 function multicast(subjectOrSubjectFactory, selector) {
-    var subjectFactory;
-    if (typeof subjectOrSubjectFactory === 'function') {
-        subjectFactory = subjectOrSubjectFactory;
-    }
-    else {
-        subjectFactory = function subjectFactory() {
-            return subjectOrSubjectFactory;
-        };
-    }
-    if (typeof selector === 'function') {
-        return this.lift(new MulticastOperator(subjectFactory, selector));
-    }
-    var connectable = Object.create(this, ConnectableObservable_1.connectableObservableDescriptor);
-    connectable.source = this;
-    connectable.subjectFactory = subjectFactory;
-    return connectable;
+    return function multicastOperatorFunction(source) {
+        var subjectFactory;
+        if (typeof subjectOrSubjectFactory === 'function') {
+            subjectFactory = subjectOrSubjectFactory;
+        }
+        else {
+            subjectFactory = function subjectFactory() {
+                return subjectOrSubjectFactory;
+            };
+        }
+        if (typeof selector === 'function') {
+            return source.lift(new MulticastOperator(subjectFactory, selector));
+        }
+        var connectable = Object.create(source, ConnectableObservable_1.connectableObservableDescriptor);
+        connectable.source = source;
+        connectable.subjectFactory = subjectFactory;
+        return connectable;
+    };
 }
 exports.multicast = multicast;
 var MulticastOperator = (function () {
@@ -28621,7 +21908,7 @@ var MulticastOperator = (function () {
 }());
 exports.MulticastOperator = MulticastOperator;
 
-},{"../observable/ConnectableObservable":257}],357:[function(require,module,exports){
+},{"../observable/ConnectableObservable":104}],174:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28678,7 +21965,9 @@ var Notification_1 = require('../Notification');
  */
 function observeOn(scheduler, delay) {
     if (delay === void 0) { delay = 0; }
-    return this.lift(new ObserveOnOperator(scheduler, delay));
+    return function observeOnOperatorFunction(source) {
+        return source.lift(new ObserveOnOperator(scheduler, delay));
+    };
 }
 exports.observeOn = observeOn;
 var ObserveOnOperator = (function () {
@@ -28735,7 +22024,7 @@ var ObserveOnMessage = (function () {
 }());
 exports.ObserveOnMessage = ObserveOnMessage;
 
-},{"../Notification":113,"../Subscriber":122}],358:[function(require,module,exports){
+},{"../Notification":89,"../Subscriber":97}],175:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28816,7 +22105,7 @@ function onErrorResumeNext() {
     if (nextSources.length === 1 && isArray_1.isArray(nextSources[0])) {
         nextSources = nextSources[0];
     }
-    return this.lift(new OnErrorResumeNextOperator(nextSources));
+    return function (source) { return source.lift(new OnErrorResumeNextOperator(nextSources)); };
 }
 exports.onErrorResumeNext = onErrorResumeNext;
 /* tslint:enable:max-line-length */
@@ -28873,7 +22162,7 @@ var OnErrorResumeNextSubscriber = (function (_super) {
     return OnErrorResumeNextSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../observable/FromObservable":264,"../util/isArray":444,"../util/subscribeToResult":455}],359:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../observable/FromObservable":107,"../util/isArray":246,"../util/subscribeToResult":258}],176:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28917,7 +22206,7 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function pairwise() {
-    return this.lift(new PairwiseOperator());
+    return function (source) { return source.lift(new PairwiseOperator()); };
 }
 exports.pairwise = pairwise;
 var PairwiseOperator = (function () {
@@ -28951,7 +22240,7 @@ var PairwiseSubscriber = (function (_super) {
     return PairwiseSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],360:[function(require,module,exports){
+},{"../Subscriber":97}],177:[function(require,module,exports){
 "use strict";
 var not_1 = require('../util/not');
 var filter_1 = require('./filter');
@@ -28997,14 +22286,14 @@ var filter_1 = require('./filter');
  * @owner Observable
  */
 function partition(predicate, thisArg) {
-    return [
-        filter_1.filter.call(this, predicate, thisArg),
-        filter_1.filter.call(this, not_1.not(predicate, thisArg))
-    ];
+    return function (source) { return [
+        filter_1.filter(predicate, thisArg)(source),
+        filter_1.filter(not_1.not(predicate, thisArg))(source)
+    ]; };
 }
 exports.partition = partition;
 
-},{"../util/not":453,"./filter":336}],361:[function(require,module,exports){
+},{"../util/not":255,"./filter":154}],178:[function(require,module,exports){
 "use strict";
 var map_1 = require('./map');
 /**
@@ -29042,7 +22331,7 @@ function pluck() {
     if (length === 0) {
         throw new Error('list of properties cannot be empty.');
     }
-    return map_1.map.call(this, plucker(properties, length));
+    return function (source) { return map_1.map(plucker(properties, length))(source); };
 }
 exports.pluck = pluck;
 function plucker(props, length) {
@@ -29062,7 +22351,7 @@ function plucker(props, length) {
     return mapper;
 }
 
-},{"./map":346}],362:[function(require,module,exports){
+},{"./map":163}],179:[function(require,module,exports){
 "use strict";
 var Subject_1 = require('../Subject');
 var multicast_1 = require('./multicast');
@@ -29081,12 +22370,13 @@ var multicast_1 = require('./multicast');
  * @owner Observable
  */
 function publish(selector) {
-    return selector ? multicast_1.multicast.call(this, function () { return new Subject_1.Subject(); }, selector) :
-        multicast_1.multicast.call(this, new Subject_1.Subject());
+    return selector ?
+        multicast_1.multicast(function () { return new Subject_1.Subject(); }, selector) :
+        multicast_1.multicast(new Subject_1.Subject());
 }
 exports.publish = publish;
 
-},{"../Subject":120,"./multicast":356}],363:[function(require,module,exports){
+},{"../Subject":95,"./multicast":173}],180:[function(require,module,exports){
 "use strict";
 var BehaviorSubject_1 = require('../BehaviorSubject');
 var multicast_1 = require('./multicast');
@@ -29097,54 +22387,38 @@ var multicast_1 = require('./multicast');
  * @owner Observable
  */
 function publishBehavior(value) {
-    return multicast_1.multicast.call(this, new BehaviorSubject_1.BehaviorSubject(value));
+    return function (source) { return multicast_1.multicast(new BehaviorSubject_1.BehaviorSubject(value))(source); };
 }
 exports.publishBehavior = publishBehavior;
 
-},{"../BehaviorSubject":111,"./multicast":356}],364:[function(require,module,exports){
+},{"../BehaviorSubject":87,"./multicast":173}],181:[function(require,module,exports){
 "use strict";
 var AsyncSubject_1 = require('../AsyncSubject');
 var multicast_1 = require('./multicast');
-/**
- * @return {ConnectableObservable<T>}
- * @method publishLast
- * @owner Observable
- */
 function publishLast() {
-    return multicast_1.multicast.call(this, new AsyncSubject_1.AsyncSubject());
+    return function (source) { return multicast_1.multicast(new AsyncSubject_1.AsyncSubject())(source); };
 }
 exports.publishLast = publishLast;
 
-},{"../AsyncSubject":110,"./multicast":356}],365:[function(require,module,exports){
+},{"../AsyncSubject":86,"./multicast":173}],182:[function(require,module,exports){
 "use strict";
 var ReplaySubject_1 = require('../ReplaySubject');
 var multicast_1 = require('./multicast');
-/**
- * @param bufferSize
- * @param windowTime
- * @param scheduler
- * @return {ConnectableObservable<T>}
- * @method publishReplay
- * @owner Observable
- */
-function publishReplay(bufferSize, windowTime, scheduler) {
-    if (bufferSize === void 0) { bufferSize = Number.POSITIVE_INFINITY; }
-    if (windowTime === void 0) { windowTime = Number.POSITIVE_INFINITY; }
-    return multicast_1.multicast.call(this, new ReplaySubject_1.ReplaySubject(bufferSize, windowTime, scheduler));
+/* tslint:enable:max-line-length */
+function publishReplay(bufferSize, windowTime, selectorOrScheduler, scheduler) {
+    if (selectorOrScheduler && typeof selectorOrScheduler !== 'function') {
+        scheduler = selectorOrScheduler;
+    }
+    var selector = typeof selectorOrScheduler === 'function' ? selectorOrScheduler : undefined;
+    var subject = new ReplaySubject_1.ReplaySubject(bufferSize, windowTime, scheduler);
+    return function (source) { return multicast_1.multicast(function () { return subject; }, selector)(source); };
 }
 exports.publishReplay = publishReplay;
 
-},{"../ReplaySubject":117,"./multicast":356}],366:[function(require,module,exports){
+},{"../ReplaySubject":93,"./multicast":173}],183:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
 var isArray_1 = require('../util/isArray');
-var ArrayObservable_1 = require('../observable/ArrayObservable');
-var OuterSubscriber_1 = require('../OuterSubscriber');
-var subscribeToResult_1 = require('../util/subscribeToResult');
+var race_1 = require('../observable/race');
 /* tslint:enable:max-line-length */
 /**
  * Returns an Observable that mirrors the first source Observable to emit an item
@@ -29159,101 +22433,23 @@ function race() {
     for (var _i = 0; _i < arguments.length; _i++) {
         observables[_i - 0] = arguments[_i];
     }
-    // if the only argument is an array, it was most likely called with
-    // `pair([obs1, obs2, ...])`
-    if (observables.length === 1 && isArray_1.isArray(observables[0])) {
-        observables = observables[0];
-    }
-    return this.lift.call(raceStatic.apply(void 0, [this].concat(observables)));
-}
-exports.race = race;
-function raceStatic() {
-    var observables = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-        observables[_i - 0] = arguments[_i];
-    }
-    // if the only argument is an array, it was most likely called with
-    // `race([obs1, obs2, ...])`
-    if (observables.length === 1) {
-        if (isArray_1.isArray(observables[0])) {
+    return function raceOperatorFunction(source) {
+        // if the only argument is an array, it was most likely called with
+        // `pair([obs1, obs2, ...])`
+        if (observables.length === 1 && isArray_1.isArray(observables[0])) {
             observables = observables[0];
         }
-        else {
-            return observables[0];
-        }
-    }
-    return new ArrayObservable_1.ArrayObservable(observables).lift(new RaceOperator());
+        return source.lift.call(race_1.race.apply(void 0, [source].concat(observables)));
+    };
 }
-exports.raceStatic = raceStatic;
-var RaceOperator = (function () {
-    function RaceOperator() {
-    }
-    RaceOperator.prototype.call = function (subscriber, source) {
-        return source.subscribe(new RaceSubscriber(subscriber));
-    };
-    return RaceOperator;
-}());
-exports.RaceOperator = RaceOperator;
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var RaceSubscriber = (function (_super) {
-    __extends(RaceSubscriber, _super);
-    function RaceSubscriber(destination) {
-        _super.call(this, destination);
-        this.hasFirst = false;
-        this.observables = [];
-        this.subscriptions = [];
-    }
-    RaceSubscriber.prototype._next = function (observable) {
-        this.observables.push(observable);
-    };
-    RaceSubscriber.prototype._complete = function () {
-        var observables = this.observables;
-        var len = observables.length;
-        if (len === 0) {
-            this.destination.complete();
-        }
-        else {
-            for (var i = 0; i < len && !this.hasFirst; i++) {
-                var observable = observables[i];
-                var subscription = subscribeToResult_1.subscribeToResult(this, observable, observable, i);
-                if (this.subscriptions) {
-                    this.subscriptions.push(subscription);
-                }
-                this.add(subscription);
-            }
-            this.observables = null;
-        }
-    };
-    RaceSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
-        if (!this.hasFirst) {
-            this.hasFirst = true;
-            for (var i = 0; i < this.subscriptions.length; i++) {
-                if (i !== outerIndex) {
-                    var subscription = this.subscriptions[i];
-                    subscription.unsubscribe();
-                    this.remove(subscription);
-                }
-            }
-            this.subscriptions = null;
-        }
-        this.destination.next(innerValue);
-    };
-    return RaceSubscriber;
-}(OuterSubscriber_1.OuterSubscriber));
-exports.RaceSubscriber = RaceSubscriber;
+exports.race = race;
 
-},{"../OuterSubscriber":116,"../observable/ArrayObservable":254,"../util/isArray":444,"../util/subscribeToResult":455}],367:[function(require,module,exports){
+},{"../observable/race":118,"../util/isArray":246}],184:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Subscriber_1 = require('../Subscriber');
+var scan_1 = require('./scan');
+var takeLast_1 = require('./takeLast');
+var defaultIfEmpty_1 = require('./defaultIfEmpty');
+var pipe_1 = require('../util/pipe');
 /* tslint:enable:max-line-length */
 /**
  * Applies an accumulator function over the source Observable, and returns the
@@ -29300,80 +22496,111 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function reduce(accumulator, seed) {
-    var hasSeed = false;
     // providing a seed of `undefined` *should* be valid and trigger
     // hasSeed! so don't use `seed !== undefined` checks!
     // For this reason, we have to check it here at the original call site
     // otherwise inside Operator/Subscriber we won't know if `undefined`
     // means they didn't provide anything or if they literally provided `undefined`
     if (arguments.length >= 2) {
-        hasSeed = true;
+        return function reduceOperatorFunctionWithSeed(source) {
+            return pipe_1.pipe(scan_1.scan(accumulator, seed), takeLast_1.takeLast(1), defaultIfEmpty_1.defaultIfEmpty(seed))(source);
+        };
     }
-    return this.lift(new ReduceOperator(accumulator, seed, hasSeed));
+    return function reduceOperatorFunction(source) {
+        return pipe_1.pipe(scan_1.scan(function (acc, value, index) {
+            return accumulator(acc, value, index + 1);
+        }), takeLast_1.takeLast(1))(source);
+    };
 }
 exports.reduce = reduce;
-var ReduceOperator = (function () {
-    function ReduceOperator(accumulator, seed, hasSeed) {
-        if (hasSeed === void 0) { hasSeed = false; }
-        this.accumulator = accumulator;
-        this.seed = seed;
-        this.hasSeed = hasSeed;
-    }
-    ReduceOperator.prototype.call = function (subscriber, source) {
-        return source.subscribe(new ReduceSubscriber(subscriber, this.accumulator, this.seed, this.hasSeed));
+
+},{"../util/pipe":256,"./defaultIfEmpty":142,"./scan":192,"./takeLast":206}],185:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('../Subscriber');
+function refCount() {
+    return function refCountOperatorFunction(source) {
+        return source.lift(new RefCountOperator(source));
     };
-    return ReduceOperator;
+}
+exports.refCount = refCount;
+var RefCountOperator = (function () {
+    function RefCountOperator(connectable) {
+        this.connectable = connectable;
+    }
+    RefCountOperator.prototype.call = function (subscriber, source) {
+        var connectable = this.connectable;
+        connectable._refCount++;
+        var refCounter = new RefCountSubscriber(subscriber, connectable);
+        var subscription = source.subscribe(refCounter);
+        if (!refCounter.closed) {
+            refCounter.connection = connectable.connect();
+        }
+        return subscription;
+    };
+    return RefCountOperator;
 }());
-exports.ReduceOperator = ReduceOperator;
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var ReduceSubscriber = (function (_super) {
-    __extends(ReduceSubscriber, _super);
-    function ReduceSubscriber(destination, accumulator, seed, hasSeed) {
+var RefCountSubscriber = (function (_super) {
+    __extends(RefCountSubscriber, _super);
+    function RefCountSubscriber(destination, connectable) {
         _super.call(this, destination);
-        this.accumulator = accumulator;
-        this.hasSeed = hasSeed;
-        this.index = 0;
-        this.hasValue = false;
-        this.acc = seed;
-        if (!this.hasSeed) {
-            this.index++;
-        }
+        this.connectable = connectable;
     }
-    ReduceSubscriber.prototype._next = function (value) {
-        if (this.hasValue || (this.hasValue = this.hasSeed)) {
-            this._tryReduce(value);
-        }
-        else {
-            this.acc = value;
-            this.hasValue = true;
-        }
-    };
-    ReduceSubscriber.prototype._tryReduce = function (value) {
-        var result;
-        try {
-            result = this.accumulator(this.acc, value, this.index++);
-        }
-        catch (err) {
-            this.destination.error(err);
+    RefCountSubscriber.prototype._unsubscribe = function () {
+        var connectable = this.connectable;
+        if (!connectable) {
+            this.connection = null;
             return;
         }
-        this.acc = result;
-    };
-    ReduceSubscriber.prototype._complete = function () {
-        if (this.hasValue || this.hasSeed) {
-            this.destination.next(this.acc);
+        this.connectable = null;
+        var refCount = connectable._refCount;
+        if (refCount <= 0) {
+            this.connection = null;
+            return;
         }
-        this.destination.complete();
+        connectable._refCount = refCount - 1;
+        if (refCount > 1) {
+            this.connection = null;
+            return;
+        }
+        ///
+        // Compare the local RefCountSubscriber's connection Subscription to the
+        // connection Subscription on the shared ConnectableObservable. In cases
+        // where the ConnectableObservable source synchronously emits values, and
+        // the RefCountSubscriber's downstream Observers synchronously unsubscribe,
+        // execution continues to here before the RefCountOperator has a chance to
+        // supply the RefCountSubscriber with the shared connection Subscription.
+        // For example:
+        // ```
+        // Observable.range(0, 10)
+        //   .publish()
+        //   .refCount()
+        //   .take(5)
+        //   .subscribe();
+        // ```
+        // In order to account for this case, RefCountSubscriber should only dispose
+        // the ConnectableObservable's shared connection Subscription if the
+        // connection Subscription exists, *and* either:
+        //   a. RefCountSubscriber doesn't have a reference to the shared connection
+        //      Subscription yet, or,
+        //   b. RefCountSubscriber's connection Subscription reference is identical
+        //      to the shared connection Subscription
+        ///
+        var connection = this.connection;
+        var sharedConnection = connectable._connection;
+        this.connection = null;
+        if (sharedConnection && (!connection || sharedConnection === connection)) {
+            sharedConnection.unsubscribe();
+        }
     };
-    return ReduceSubscriber;
+    return RefCountSubscriber;
 }(Subscriber_1.Subscriber));
-exports.ReduceSubscriber = ReduceSubscriber;
 
-},{"../Subscriber":122}],368:[function(require,module,exports){
+},{"../Subscriber":97}],186:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29396,15 +22623,17 @@ var EmptyObservable_1 = require('../observable/EmptyObservable');
  */
 function repeat(count) {
     if (count === void 0) { count = -1; }
-    if (count === 0) {
-        return new EmptyObservable_1.EmptyObservable();
-    }
-    else if (count < 0) {
-        return this.lift(new RepeatOperator(-1, this));
-    }
-    else {
-        return this.lift(new RepeatOperator(count - 1, this));
-    }
+    return function (source) {
+        if (count === 0) {
+            return new EmptyObservable_1.EmptyObservable();
+        }
+        else if (count < 0) {
+            return source.lift(new RepeatOperator(-1, source));
+        }
+        else {
+            return source.lift(new RepeatOperator(count - 1, source));
+        }
+    };
 }
 exports.repeat = repeat;
 var RepeatOperator = (function () {
@@ -29444,7 +22673,7 @@ var RepeatSubscriber = (function (_super) {
     return RepeatSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../observable/EmptyObservable":259}],369:[function(require,module,exports){
+},{"../Subscriber":97,"../observable/EmptyObservable":105}],187:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29471,7 +22700,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function repeatWhen(notifier) {
-    return this.lift(new RepeatWhenOperator(notifier));
+    return function (source) { return source.lift(new RepeatWhenOperator(notifier)); };
 }
 exports.repeatWhen = repeatWhen;
 var RepeatWhenOperator = (function () {
@@ -29553,7 +22782,7 @@ var RepeatWhenSubscriber = (function (_super) {
     return RepeatWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subject":120,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],370:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subject":95,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],188:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29579,7 +22808,7 @@ var Subscriber_1 = require('../Subscriber');
  */
 function retry(count) {
     if (count === void 0) { count = -1; }
-    return this.lift(new RetryOperator(count, this));
+    return function (source) { return source.lift(new RetryOperator(count, source)); };
 }
 exports.retry = retry;
 var RetryOperator = (function () {
@@ -29619,7 +22848,7 @@ var RetrySubscriber = (function (_super) {
     return RetrySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],371:[function(require,module,exports){
+},{"../Subscriber":97}],189:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29646,7 +22875,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function retryWhen(notifier) {
-    return this.lift(new RetryWhenOperator(notifier, this));
+    return function (source) { return source.lift(new RetryWhenOperator(notifier, source)); };
 }
 exports.retryWhen = retryWhen;
 var RetryWhenOperator = (function () {
@@ -29721,7 +22950,7 @@ var RetryWhenSubscriber = (function (_super) {
     return RetryWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subject":120,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],372:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subject":95,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],190:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29765,7 +22994,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function sample(notifier) {
-    return this.lift(new SampleOperator(notifier));
+    return function (source) { return source.lift(new SampleOperator(notifier)); };
 }
 exports.sample = sample;
 var SampleOperator = (function () {
@@ -29810,7 +23039,7 @@ var SampleSubscriber = (function (_super) {
     return SampleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],373:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],191:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29857,7 +23086,7 @@ var async_1 = require('../scheduler/async');
  */
 function sampleTime(period, scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
-    return this.lift(new SampleTimeOperator(period, scheduler));
+    return function (source) { return source.lift(new SampleTimeOperator(period, scheduler)); };
 }
 exports.sampleTime = sampleTime;
 var SampleTimeOperator = (function () {
@@ -29902,7 +23131,7 @@ function dispatchNotification(state) {
     this.schedule(state, period);
 }
 
-},{"../Subscriber":122,"../scheduler/async":420}],374:[function(require,module,exports){
+},{"../Subscriber":97,"../scheduler/async":230}],192:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29958,7 +23187,9 @@ function scan(accumulator, seed) {
     if (arguments.length >= 2) {
         hasSeed = true;
     }
-    return this.lift(new ScanOperator(accumulator, seed, hasSeed));
+    return function scanOperatorFunction(source) {
+        return source.lift(new ScanOperator(accumulator, seed, hasSeed));
+    };
 }
 exports.scan = scan;
 var ScanOperator = (function () {
@@ -30022,7 +23253,7 @@ var ScanSubscriber = (function (_super) {
     return ScanSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],375:[function(require,module,exports){
+},{"../Subscriber":97}],193:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30085,7 +23316,7 @@ var errorObject_1 = require('../util/errorObject');
  * @owner Observable
  */
 function sequenceEqual(compareTo, comparor) {
-    return this.lift(new SequenceEqualOperator(compareTo, comparor));
+    return function (source) { return source.lift(new SequenceEqualOperator(compareTo, comparor)); };
 }
 exports.sequenceEqual = sequenceEqual;
 var SequenceEqualOperator = (function () {
@@ -30187,9 +23418,10 @@ var SequenceEqualCompareToSubscriber = (function (_super) {
     return SequenceEqualCompareToSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/errorObject":443,"../util/tryCatch":457}],376:[function(require,module,exports){
+},{"../Subscriber":97,"../util/errorObject":244,"../util/tryCatch":260}],194:[function(require,module,exports){
 "use strict";
 var multicast_1 = require('./multicast');
+var refCount_1 = require('./refCount');
 var Subject_1 = require('../Subject');
 function shareSubjectFactory() {
     return new Subject_1.Subject();
@@ -30198,7 +23430,7 @@ function shareSubjectFactory() {
  * Returns a new Observable that multicasts (shares) the original Observable. As long as there is at least one
  * Subscriber this Observable will be subscribed and emitting data. When all subscribers have unsubscribed it will
  * unsubscribe from the source Observable. Because the Observable is multicasting it makes the stream `hot`.
- * This is an alias for .publish().refCount().
+ * This is an alias for .multicast(() => new Subject()).refCount().
  *
  * <img src="./img/share.png" width="100%">
  *
@@ -30207,35 +23439,58 @@ function shareSubjectFactory() {
  * @owner Observable
  */
 function share() {
-    return multicast_1.multicast.call(this, shareSubjectFactory).refCount();
+    return function (source) { return refCount_1.refCount()(multicast_1.multicast(shareSubjectFactory)(source)); };
 }
 exports.share = share;
 ;
 
-},{"../Subject":120,"./multicast":356}],377:[function(require,module,exports){
+},{"../Subject":95,"./multicast":173,"./refCount":185}],195:[function(require,module,exports){
 "use strict";
-var multicast_1 = require('./multicast');
 var ReplaySubject_1 = require('../ReplaySubject');
 /**
  * @method shareReplay
  * @owner Observable
  */
 function shareReplay(bufferSize, windowTime, scheduler) {
-    var subject;
-    var connectable = multicast_1.multicast.call(this, function shareReplaySubjectFactory() {
-        if (this._isComplete) {
-            return subject;
-        }
-        else {
-            return (subject = new ReplaySubject_1.ReplaySubject(bufferSize, windowTime, scheduler));
-        }
-    });
-    return connectable.refCount();
+    return function (source) { return source.lift(shareReplayOperator(bufferSize, windowTime, scheduler)); };
 }
 exports.shareReplay = shareReplay;
+function shareReplayOperator(bufferSize, windowTime, scheduler) {
+    var subject;
+    var refCount = 0;
+    var subscription;
+    var hasError = false;
+    var isComplete = false;
+    return function shareReplayOperation(source) {
+        refCount++;
+        if (!subject || hasError) {
+            hasError = false;
+            subject = new ReplaySubject_1.ReplaySubject(bufferSize, windowTime, scheduler);
+            subscription = source.subscribe({
+                next: function (value) { subject.next(value); },
+                error: function (err) {
+                    hasError = true;
+                    subject.error(err);
+                },
+                complete: function () {
+                    isComplete = true;
+                    subject.complete();
+                },
+            });
+        }
+        var innerSub = subject.subscribe(this);
+        return function () {
+            refCount--;
+            innerSub.unsubscribe();
+            if (subscription && refCount === 0 && isComplete) {
+                subscription.unsubscribe();
+            }
+        };
+    };
+}
 ;
 
-},{"../ReplaySubject":117,"./multicast":356}],378:[function(require,module,exports){
+},{"../ReplaySubject":93}],196:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30261,7 +23516,7 @@ var EmptyError_1 = require('../util/EmptyError');
  * @owner Observable
  */
 function single(predicate) {
-    return this.lift(new SingleOperator(predicate, this));
+    return function (source) { return source.lift(new SingleOperator(predicate, source)); };
 }
 exports.single = single;
 var SingleOperator = (function () {
@@ -30329,7 +23584,7 @@ var SingleSubscriber = (function (_super) {
     return SingleSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/EmptyError":432}],379:[function(require,module,exports){
+},{"../Subscriber":97,"../util/EmptyError":236}],197:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30349,7 +23604,7 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function skip(count) {
-    return this.lift(new SkipOperator(count));
+    return function (source) { return source.lift(new SkipOperator(count)); };
 }
 exports.skip = skip;
 var SkipOperator = (function () {
@@ -30381,7 +23636,7 @@ var SkipSubscriber = (function (_super) {
     return SkipSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],380:[function(require,module,exports){
+},{"../Subscriber":97}],198:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30423,7 +23678,7 @@ var ArgumentOutOfRangeError_1 = require('../util/ArgumentOutOfRangeError');
  * @owner Observable
  */
 function skipLast(count) {
-    return this.lift(new SkipLastOperator(count));
+    return function (source) { return source.lift(new SkipLastOperator(count)); };
 }
 exports.skipLast = skipLast;
 var SkipLastOperator = (function () {
@@ -30475,7 +23730,7 @@ var SkipLastSubscriber = (function (_super) {
     return SkipLastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../util/ArgumentOutOfRangeError":431}],381:[function(require,module,exports){
+},{"../Subscriber":97,"../util/ArgumentOutOfRangeError":235}],199:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30497,7 +23752,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function skipUntil(notifier) {
-    return this.lift(new SkipUntilOperator(notifier));
+    return function (source) { return source.lift(new SkipUntilOperator(notifier)); };
 }
 exports.skipUntil = skipUntil;
 var SkipUntilOperator = (function () {
@@ -30547,7 +23802,7 @@ var SkipUntilSubscriber = (function (_super) {
     return SkipUntilSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],382:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],200:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30568,7 +23823,7 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function skipWhile(predicate) {
-    return this.lift(new SkipWhileOperator(predicate));
+    return function (source) { return source.lift(new SkipWhileOperator(predicate)); };
 }
 exports.skipWhile = skipWhile;
 var SkipWhileOperator = (function () {
@@ -30614,12 +23869,12 @@ var SkipWhileSubscriber = (function (_super) {
     return SkipWhileSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],383:[function(require,module,exports){
+},{"../Subscriber":97}],201:[function(require,module,exports){
 "use strict";
 var ArrayObservable_1 = require('../observable/ArrayObservable');
 var ScalarObservable_1 = require('../observable/ScalarObservable');
 var EmptyObservable_1 = require('../observable/EmptyObservable');
-var concat_1 = require('./concat');
+var concat_1 = require('../observable/concat');
 var isScheduler_1 = require('../util/isScheduler');
 /* tslint:enable:max-line-length */
 /**
@@ -30641,166 +23896,38 @@ function startWith() {
     for (var _i = 0; _i < arguments.length; _i++) {
         array[_i - 0] = arguments[_i];
     }
-    var scheduler = array[array.length - 1];
-    if (isScheduler_1.isScheduler(scheduler)) {
-        array.pop();
-    }
-    else {
-        scheduler = null;
-    }
-    var len = array.length;
-    if (len === 1) {
-        return concat_1.concatStatic(new ScalarObservable_1.ScalarObservable(array[0], scheduler), this);
-    }
-    else if (len > 1) {
-        return concat_1.concatStatic(new ArrayObservable_1.ArrayObservable(array, scheduler), this);
-    }
-    else {
-        return concat_1.concatStatic(new EmptyObservable_1.EmptyObservable(scheduler), this);
-    }
+    return function (source) {
+        var scheduler = array[array.length - 1];
+        if (isScheduler_1.isScheduler(scheduler)) {
+            array.pop();
+        }
+        else {
+            scheduler = null;
+        }
+        var len = array.length;
+        if (len === 1) {
+            return concat_1.concat(new ScalarObservable_1.ScalarObservable(array[0], scheduler), source);
+        }
+        else if (len > 1) {
+            return concat_1.concat(new ArrayObservable_1.ArrayObservable(array, scheduler), source);
+        }
+        else {
+            return concat_1.concat(new EmptyObservable_1.EmptyObservable(scheduler), source);
+        }
+    };
 }
 exports.startWith = startWith;
 
-},{"../observable/ArrayObservable":254,"../observable/EmptyObservable":259,"../observable/ScalarObservable":273,"../util/isScheduler":451,"./concat":316}],384:[function(require,module,exports){
+},{"../observable/ArrayObservable":103,"../observable/EmptyObservable":105,"../observable/ScalarObservable":110,"../observable/concat":112,"../util/isScheduler":253}],202:[function(require,module,exports){
 "use strict";
-var SubscribeOnObservable_1 = require('../observable/SubscribeOnObservable');
-/**
- * Asynchronously subscribes Observers to this Observable on the specified IScheduler.
- *
- * <img src="./img/subscribeOn.png" width="100%">
- *
- * @param {Scheduler} scheduler - The IScheduler to perform subscription actions on.
- * @return {Observable<T>} The source Observable modified so that its subscriptions happen on the specified IScheduler.
- .
- * @method subscribeOn
- * @owner Observable
- */
-function subscribeOn(scheduler, delay) {
-    if (delay === void 0) { delay = 0; }
-    return this.lift(new SubscribeOnOperator(scheduler, delay));
+var switchMap_1 = require('./switchMap');
+var identity_1 = require('../util/identity');
+function switchAll() {
+    return switchMap_1.switchMap(identity_1.identity);
 }
-exports.subscribeOn = subscribeOn;
-var SubscribeOnOperator = (function () {
-    function SubscribeOnOperator(scheduler, delay) {
-        this.scheduler = scheduler;
-        this.delay = delay;
-    }
-    SubscribeOnOperator.prototype.call = function (subscriber, source) {
-        return new SubscribeOnObservable_1.SubscribeOnObservable(source, this.delay, this.scheduler).subscribe(subscriber);
-    };
-    return SubscribeOnOperator;
-}());
+exports.switchAll = switchAll;
 
-},{"../observable/SubscribeOnObservable":274}],385:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var OuterSubscriber_1 = require('../OuterSubscriber');
-var subscribeToResult_1 = require('../util/subscribeToResult');
-/**
- * Converts a higher-order Observable into a first-order Observable by
- * subscribing to only the most recently emitted of those inner Observables.
- *
- * <span class="informal">Flattens an Observable-of-Observables by dropping the
- * previous inner Observable once a new one appears.</span>
- *
- * <img src="./img/switch.png" width="100%">
- *
- * `switch` subscribes to an Observable that emits Observables, also known as a
- * higher-order Observable. Each time it observes one of these emitted inner
- * Observables, the output Observable subscribes to the inner Observable and
- * begins emitting the items emitted by that. So far, it behaves
- * like {@link mergeAll}. However, when a new inner Observable is emitted,
- * `switch` unsubscribes from the earlier-emitted inner Observable and
- * subscribes to the new inner Observable and begins emitting items from it. It
- * continues to behave like this for subsequent inner Observables.
- *
- * @example <caption>Rerun an interval Observable on every click event</caption>
- * var clicks = Rx.Observable.fromEvent(document, 'click');
- * // Each click event is mapped to an Observable that ticks every second
- * var higherOrder = clicks.map((ev) => Rx.Observable.interval(1000));
- * var switched = higherOrder.switch();
- * // The outcome is that `switched` is essentially a timer that restarts
- * // on every click. The interval Observables from older clicks do not merge
- * // with the current interval Observable.
- * switched.subscribe(x => console.log(x));
- *
- * @see {@link combineAll}
- * @see {@link concatAll}
- * @see {@link exhaust}
- * @see {@link mergeAll}
- * @see {@link switchMap}
- * @see {@link switchMapTo}
- * @see {@link zipAll}
- *
- * @return {Observable<T>} An Observable that emits the items emitted by the
- * Observable most recently emitted by the source Observable.
- * @method switch
- * @name switch
- * @owner Observable
- */
-function _switch() {
-    return this.lift(new SwitchOperator());
-}
-exports._switch = _switch;
-var SwitchOperator = (function () {
-    function SwitchOperator() {
-    }
-    SwitchOperator.prototype.call = function (subscriber, source) {
-        return source.subscribe(new SwitchSubscriber(subscriber));
-    };
-    return SwitchOperator;
-}());
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var SwitchSubscriber = (function (_super) {
-    __extends(SwitchSubscriber, _super);
-    function SwitchSubscriber(destination) {
-        _super.call(this, destination);
-        this.active = 0;
-        this.hasCompleted = false;
-    }
-    SwitchSubscriber.prototype._next = function (value) {
-        this.unsubscribeInner();
-        this.active++;
-        this.add(this.innerSubscription = subscribeToResult_1.subscribeToResult(this, value));
-    };
-    SwitchSubscriber.prototype._complete = function () {
-        this.hasCompleted = true;
-        if (this.active === 0) {
-            this.destination.complete();
-        }
-    };
-    SwitchSubscriber.prototype.unsubscribeInner = function () {
-        this.active = this.active > 0 ? this.active - 1 : 0;
-        var innerSubscription = this.innerSubscription;
-        if (innerSubscription) {
-            innerSubscription.unsubscribe();
-            this.remove(innerSubscription);
-        }
-    };
-    SwitchSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
-        this.destination.next(innerValue);
-    };
-    SwitchSubscriber.prototype.notifyError = function (err) {
-        this.destination.error(err);
-    };
-    SwitchSubscriber.prototype.notifyComplete = function () {
-        this.unsubscribeInner();
-        if (this.hasCompleted && this.active === 0) {
-            this.destination.complete();
-        }
-    };
-    return SwitchSubscriber;
-}(OuterSubscriber_1.OuterSubscriber));
-
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],386:[function(require,module,exports){
+},{"../util/identity":245,"./switchMap":203}],203:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30858,7 +23985,9 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function switchMap(project, resultSelector) {
-    return this.lift(new SwitchMapOperator(project, resultSelector));
+    return function switchMapOperatorFunction(source) {
+        return source.lift(new SwitchMapOperator(project, resultSelector));
+    };
 }
 exports.switchMap = switchMap;
 var SwitchMapOperator = (function () {
@@ -30941,7 +24070,7 @@ var SwitchMapSubscriber = (function (_super) {
     return SwitchMapSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],387:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],204:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30994,7 +24123,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function switchMapTo(innerObservable, resultSelector) {
-    return this.lift(new SwitchMapToOperator(innerObservable, resultSelector));
+    return function (source) { return source.lift(new SwitchMapToOperator(innerObservable, resultSelector)); };
 }
 exports.switchMapTo = switchMapTo;
 var SwitchMapToOperator = (function () {
@@ -31067,7 +24196,7 @@ var SwitchMapToSubscriber = (function (_super) {
     return SwitchMapToSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],388:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],205:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31111,12 +24240,14 @@ var EmptyObservable_1 = require('../observable/EmptyObservable');
  * @owner Observable
  */
 function take(count) {
-    if (count === 0) {
-        return new EmptyObservable_1.EmptyObservable();
-    }
-    else {
-        return this.lift(new TakeOperator(count));
-    }
+    return function (source) {
+        if (count === 0) {
+            return new EmptyObservable_1.EmptyObservable();
+        }
+        else {
+            return source.lift(new TakeOperator(count));
+        }
+    };
 }
 exports.take = take;
 var TakeOperator = (function () {
@@ -31157,7 +24288,7 @@ var TakeSubscriber = (function (_super) {
     return TakeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../observable/EmptyObservable":259,"../util/ArgumentOutOfRangeError":431}],389:[function(require,module,exports){
+},{"../Subscriber":97,"../observable/EmptyObservable":105,"../util/ArgumentOutOfRangeError":235}],206:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31204,12 +24335,14 @@ var EmptyObservable_1 = require('../observable/EmptyObservable');
  * @owner Observable
  */
 function takeLast(count) {
-    if (count === 0) {
-        return new EmptyObservable_1.EmptyObservable();
-    }
-    else {
-        return this.lift(new TakeLastOperator(count));
-    }
+    return function takeLastOperatorFunction(source) {
+        if (count === 0) {
+            return new EmptyObservable_1.EmptyObservable();
+        }
+        else {
+            return source.lift(new TakeLastOperator(count));
+        }
+    };
 }
 exports.takeLast = takeLast;
 var TakeLastOperator = (function () {
@@ -31265,7 +24398,7 @@ var TakeLastSubscriber = (function (_super) {
     return TakeLastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../observable/EmptyObservable":259,"../util/ArgumentOutOfRangeError":431}],390:[function(require,module,exports){
+},{"../Subscriber":97,"../observable/EmptyObservable":105,"../util/ArgumentOutOfRangeError":235}],207:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31308,7 +24441,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function takeUntil(notifier) {
-    return this.lift(new TakeUntilOperator(notifier));
+    return function (source) { return source.lift(new TakeUntilOperator(notifier)); };
 }
 exports.takeUntil = takeUntil;
 var TakeUntilOperator = (function () {
@@ -31341,7 +24474,7 @@ var TakeUntilSubscriber = (function (_super) {
     return TakeUntilSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],391:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],208:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31386,7 +24519,7 @@ var Subscriber_1 = require('../Subscriber');
  * @owner Observable
  */
 function takeWhile(predicate) {
-    return this.lift(new TakeWhileOperator(predicate));
+    return function (source) { return source.lift(new TakeWhileOperator(predicate)); };
 }
 exports.takeWhile = takeWhile;
 var TakeWhileOperator = (function () {
@@ -31434,7 +24567,121 @@ var TakeWhileSubscriber = (function (_super) {
     return TakeWhileSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],392:[function(require,module,exports){
+},{"../Subscriber":97}],209:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('../Subscriber');
+/* tslint:enable:max-line-length */
+/**
+ * Perform a side effect for every emission on the source Observable, but return
+ * an Observable that is identical to the source.
+ *
+ * <span class="informal">Intercepts each emission on the source and runs a
+ * function, but returns an output which is identical to the source as long as errors don't occur.</span>
+ *
+ * <img src="./img/do.png" width="100%">
+ *
+ * Returns a mirrored Observable of the source Observable, but modified so that
+ * the provided Observer is called to perform a side effect for every value,
+ * error, and completion emitted by the source. Any errors that are thrown in
+ * the aforementioned Observer or handlers are safely sent down the error path
+ * of the output Observable.
+ *
+ * This operator is useful for debugging your Observables for the correct values
+ * or performing other side effects.
+ *
+ * Note: this is different to a `subscribe` on the Observable. If the Observable
+ * returned by `do` is not subscribed, the side effects specified by the
+ * Observer will never happen. `do` therefore simply spies on existing
+ * execution, it does not trigger an execution to happen like `subscribe` does.
+ *
+ * @example <caption>Map every click to the clientX position of that click, while also logging the click event</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var positions = clicks
+ *   .do(ev => console.log(ev))
+ *   .map(ev => ev.clientX);
+ * positions.subscribe(x => console.log(x));
+ *
+ * @see {@link map}
+ * @see {@link subscribe}
+ *
+ * @param {Observer|function} [nextOrObserver] A normal Observer object or a
+ * callback for `next`.
+ * @param {function} [error] Callback for errors in the source.
+ * @param {function} [complete] Callback for the completion of the source.
+ * @return {Observable} An Observable identical to the source, but runs the
+ * specified Observer or callback(s) for each item.
+ * @name tap
+ */
+function tap(nextOrObserver, error, complete) {
+    return function tapOperatorFunction(source) {
+        return source.lift(new DoOperator(nextOrObserver, error, complete));
+    };
+}
+exports.tap = tap;
+var DoOperator = (function () {
+    function DoOperator(nextOrObserver, error, complete) {
+        this.nextOrObserver = nextOrObserver;
+        this.error = error;
+        this.complete = complete;
+    }
+    DoOperator.prototype.call = function (subscriber, source) {
+        return source.subscribe(new DoSubscriber(subscriber, this.nextOrObserver, this.error, this.complete));
+    };
+    return DoOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var DoSubscriber = (function (_super) {
+    __extends(DoSubscriber, _super);
+    function DoSubscriber(destination, nextOrObserver, error, complete) {
+        _super.call(this, destination);
+        var safeSubscriber = new Subscriber_1.Subscriber(nextOrObserver, error, complete);
+        safeSubscriber.syncErrorThrowable = true;
+        this.add(safeSubscriber);
+        this.safeSubscriber = safeSubscriber;
+    }
+    DoSubscriber.prototype._next = function (value) {
+        var safeSubscriber = this.safeSubscriber;
+        safeSubscriber.next(value);
+        if (safeSubscriber.syncErrorThrown) {
+            this.destination.error(safeSubscriber.syncErrorValue);
+        }
+        else {
+            this.destination.next(value);
+        }
+    };
+    DoSubscriber.prototype._error = function (err) {
+        var safeSubscriber = this.safeSubscriber;
+        safeSubscriber.error(err);
+        if (safeSubscriber.syncErrorThrown) {
+            this.destination.error(safeSubscriber.syncErrorValue);
+        }
+        else {
+            this.destination.error(err);
+        }
+    };
+    DoSubscriber.prototype._complete = function () {
+        var safeSubscriber = this.safeSubscriber;
+        safeSubscriber.complete();
+        if (safeSubscriber.syncErrorThrown) {
+            this.destination.error(safeSubscriber.syncErrorValue);
+        }
+        else {
+            this.destination.complete();
+        }
+    };
+    return DoSubscriber;
+}(Subscriber_1.Subscriber));
+
+},{"../Subscriber":97}],210:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31489,7 +24736,7 @@ exports.defaultThrottleConfig = {
  */
 function throttle(durationSelector, config) {
     if (config === void 0) { config = exports.defaultThrottleConfig; }
-    return this.lift(new ThrottleOperator(durationSelector, config.leading, config.trailing));
+    return function (source) { return source.lift(new ThrottleOperator(durationSelector, config.leading, config.trailing)); };
 }
 exports.throttle = throttle;
 var ThrottleOperator = (function () {
@@ -31577,7 +24824,7 @@ var ThrottleSubscriber = (function (_super) {
     return ThrottleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],393:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],211:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31629,7 +24876,7 @@ var throttle_1 = require('./throttle');
 function throttleTime(duration, scheduler, config) {
     if (scheduler === void 0) { scheduler = async_1.async; }
     if (config === void 0) { config = throttle_1.defaultThrottleConfig; }
-    return this.lift(new ThrottleTimeOperator(duration, scheduler, config.leading, config.trailing));
+    return function (source) { return source.lift(new ThrottleTimeOperator(duration, scheduler, config.leading, config.trailing)); };
 }
 exports.throttleTime = throttleTime;
 var ThrottleTimeOperator = (function () {
@@ -31694,7 +24941,7 @@ function dispatchNext(arg) {
     subscriber.clearThrottle();
 }
 
-},{"../Subscriber":122,"../scheduler/async":420,"./throttle":392}],394:[function(require,module,exports){
+},{"../Subscriber":97,"../scheduler/async":230,"./throttle":210}],212:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31703,15 +24950,9 @@ var __extends = (this && this.__extends) || function (d, b) {
 };
 var Subscriber_1 = require('../Subscriber');
 var async_1 = require('../scheduler/async');
-/**
- * @param scheduler
- * @return {Observable<TimeInterval<any>>|WebSocketSubject<T>|Observable<T>}
- * @method timeInterval
- * @owner Observable
- */
 function timeInterval(scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
-    return this.lift(new TimeIntervalOperator(scheduler));
+    return function (source) { return source.lift(new TimeIntervalOperator(scheduler)); };
 }
 exports.timeInterval = timeInterval;
 var TimeInterval = (function () {
@@ -31754,7 +24995,7 @@ var TimeIntervalSubscriber = (function (_super) {
     return TimeIntervalSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../scheduler/async":420}],395:[function(require,module,exports){
+},{"../Subscriber":97,"../scheduler/async":230}],213:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31834,7 +25075,7 @@ function timeout(due, scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
     var absoluteTimeout = isDate_1.isDate(due);
     var waitFor = absoluteTimeout ? (+due - scheduler.now()) : Math.abs(due);
-    return this.lift(new TimeoutOperator(waitFor, absoluteTimeout, scheduler, new TimeoutError_1.TimeoutError()));
+    return function (source) { return source.lift(new TimeoutOperator(waitFor, absoluteTimeout, scheduler, new TimeoutError_1.TimeoutError())); };
 }
 exports.timeout = timeout;
 var TimeoutOperator = (function () {
@@ -31896,7 +25137,7 @@ var TimeoutSubscriber = (function (_super) {
     return TimeoutSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../scheduler/async":420,"../util/TimeoutError":439,"../util/isDate":446}],396:[function(require,module,exports){
+},{"../Subscriber":97,"../scheduler/async":230,"../util/TimeoutError":242,"../util/isDate":248}],214:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31909,18 +25150,59 @@ var OuterSubscriber_1 = require('../OuterSubscriber');
 var subscribeToResult_1 = require('../util/subscribeToResult');
 /* tslint:enable:max-line-length */
 /**
- * @param due
- * @param withObservable
- * @param scheduler
- * @return {Observable<R>|WebSocketSubject<T>|Observable<T>}
+ *
+ * Errors if Observable does not emit a value in given time span, in case of which
+ * subscribes to the second Observable.
+ *
+ * <span class="informal">It's a version of `timeout` operator that let's you specify fallback Observable.</span>
+ *
+ * <img src="./img/timeoutWith.png" width="100%">
+ *
+ * `timeoutWith` is a variation of `timeout` operator. It behaves exactly the same,
+ * still accepting as a first argument either a number or a Date, which control - respectively -
+ * when values of source Observable should be emitted or when it should complete.
+ *
+ * The only difference is that it accepts a second, required parameter. This parameter
+ * should be an Observable which will be subscribed when source Observable fails any timeout check.
+ * So whenever regular `timeout` would emit an error, `timeoutWith` will instead start re-emitting
+ * values from second Observable. Note that this fallback Observable is not checked for timeouts
+ * itself, so it can emit values and complete at arbitrary points in time. From the moment of a second
+ * subscription, Observable returned from `timeoutWith` simply mirrors fallback stream. When that
+ * stream completes, it completes as well.
+ *
+ * Scheduler, which in case of `timeout` is provided as as second argument, can be still provided
+ * here - as a third, optional parameter. It still is used to schedule timeout checks and -
+ * as a consequence - when second Observable will be subscribed, since subscription happens
+ * immediately after failing check.
+ *
+ * @example <caption>Add fallback observable</caption>
+ * const seconds = Rx.Observable.interval(1000);
+ * const minutes = Rx.Observable.interval(60 * 1000);
+ *
+ * seconds.timeoutWith(900, minutes)
+ *     .subscribe(
+ *         value => console.log(value), // After 900ms, will start emitting `minutes`,
+ *                                      // since first value of `seconds` will not arrive fast enough.
+ *         err => console.log(err) // Would be called after 900ms in case of `timeout`,
+ *                                 // but here will never be called.
+ *     );
+ *
+ * @param {number|Date} due Number specifying period within which Observable must emit values
+ *                          or Date specifying before when Observable should complete
+ * @param {Observable<T>} withObservable Observable which will be subscribed if source fails timeout check.
+ * @param {Scheduler} [scheduler] Scheduler controlling when timeout checks occur.
+ * @return {Observable<T>} Observable that mirrors behaviour of source or, when timeout check fails, of an Observable
+ *                          passed as a second parameter.
  * @method timeoutWith
  * @owner Observable
  */
 function timeoutWith(due, withObservable, scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
-    var absoluteTimeout = isDate_1.isDate(due);
-    var waitFor = absoluteTimeout ? (+due - scheduler.now()) : Math.abs(due);
-    return this.lift(new TimeoutWithOperator(waitFor, absoluteTimeout, withObservable, scheduler));
+    return function (source) {
+        var absoluteTimeout = isDate_1.isDate(due);
+        var waitFor = absoluteTimeout ? (+due - scheduler.now()) : Math.abs(due);
+        return source.lift(new TimeoutWithOperator(waitFor, absoluteTimeout, withObservable, scheduler));
+    };
 }
 exports.timeoutWith = timeoutWith;
 var TimeoutWithOperator = (function () {
@@ -31984,15 +25266,10 @@ var TimeoutWithSubscriber = (function (_super) {
     return TimeoutWithSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../scheduler/async":420,"../util/isDate":446,"../util/subscribeToResult":455}],397:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../scheduler/async":230,"../util/isDate":248,"../util/subscribeToResult":258}],215:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Subscriber_1 = require('../Subscriber');
 var async_1 = require('../scheduler/async');
+var map_1 = require('./map');
 /**
  * @param scheduler
  * @return {Observable<Timestamp<any>>|WebSocketSubject<T>|Observable<T>}
@@ -32001,7 +25278,8 @@ var async_1 = require('../scheduler/async');
  */
 function timestamp(scheduler) {
     if (scheduler === void 0) { scheduler = async_1.async; }
-    return this.lift(new TimestampOperator(scheduler));
+    return map_1.map(function (value) { return new Timestamp(value, scheduler.now()); });
+    // return (source: Observable<T>) => source.lift(new TimestampOperator(scheduler));
 }
 exports.timestamp = timestamp;
 var Timestamp = (function () {
@@ -32013,148 +25291,23 @@ var Timestamp = (function () {
 }());
 exports.Timestamp = Timestamp;
 ;
-var TimestampOperator = (function () {
-    function TimestampOperator(scheduler) {
-        this.scheduler = scheduler;
-    }
-    TimestampOperator.prototype.call = function (observer, source) {
-        return source.subscribe(new TimestampSubscriber(observer, this.scheduler));
-    };
-    return TimestampOperator;
-}());
-var TimestampSubscriber = (function (_super) {
-    __extends(TimestampSubscriber, _super);
-    function TimestampSubscriber(destination, scheduler) {
-        _super.call(this, destination);
-        this.scheduler = scheduler;
-    }
-    TimestampSubscriber.prototype._next = function (value) {
-        var now = this.scheduler.now();
-        this.destination.next(new Timestamp(value, now));
-    };
-    return TimestampSubscriber;
-}(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122,"../scheduler/async":420}],398:[function(require,module,exports){
+},{"../scheduler/async":230,"./map":163}],216:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Subscriber_1 = require('../Subscriber');
-/**
- * @return {Observable<any[]>|WebSocketSubject<T>|Observable<T>}
- * @method toArray
- * @owner Observable
- */
+var reduce_1 = require('./reduce');
+function toArrayReducer(arr, item, index) {
+    if (index === 0) {
+        return [item];
+    }
+    arr.push(item);
+    return arr;
+}
 function toArray() {
-    return this.lift(new ToArrayOperator());
+    return reduce_1.reduce(toArrayReducer, []);
 }
 exports.toArray = toArray;
-var ToArrayOperator = (function () {
-    function ToArrayOperator() {
-    }
-    ToArrayOperator.prototype.call = function (subscriber, source) {
-        return source.subscribe(new ToArraySubscriber(subscriber));
-    };
-    return ToArrayOperator;
-}());
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var ToArraySubscriber = (function (_super) {
-    __extends(ToArraySubscriber, _super);
-    function ToArraySubscriber(destination) {
-        _super.call(this, destination);
-        this.array = [];
-    }
-    ToArraySubscriber.prototype._next = function (x) {
-        this.array.push(x);
-    };
-    ToArraySubscriber.prototype._complete = function () {
-        this.destination.next(this.array);
-        this.destination.complete();
-    };
-    return ToArraySubscriber;
-}(Subscriber_1.Subscriber));
 
-},{"../Subscriber":122}],399:[function(require,module,exports){
-"use strict";
-var root_1 = require('../util/root');
-/* tslint:enable:max-line-length */
-/**
- * Converts an Observable sequence to a ES2015 compliant promise.
- *
- * @example
- * // Using normal ES2015
- * let source = Rx.Observable
- *   .of(42)
- *   .toPromise();
- *
- * source.then((value) => console.log('Value: %s', value));
- * // => Value: 42
- *
- * // Rejected Promise
- * // Using normal ES2015
- * let source = Rx.Observable
- *   .throw(new Error('woops'))
- *   .toPromise();
- *
- * source
- *   .then((value) => console.log('Value: %s', value))
- *   .catch((err) => console.log('Error: %s', err));
- * // => Error: Error: woops
- *
- * // Setting via the config
- * Rx.config.Promise = RSVP.Promise;
- *
- * let source = Rx.Observable
- *   .of(42)
- *   .toPromise();
- *
- * source.then((value) => console.log('Value: %s', value));
- * // => Value: 42
- *
- * // Setting via the method
- * let source = Rx.Observable
- *   .of(42)
- *   .toPromise(RSVP.Promise);
- *
- * source.then((value) => console.log('Value: %s', value));
- * // => Value: 42
- *
- * @param {PromiseConstructor} [PromiseCtor] The constructor of the promise. If not provided,
- * it will look for a constructor first in Rx.config.Promise then fall back to
- * the native Promise constructor if available.
- * @return {Promise<T>} An ES2015 compatible promise with the last value from
- * the observable sequence.
- * @method toPromise
- * @owner Observable
- */
-function toPromise(PromiseCtor) {
-    var _this = this;
-    if (!PromiseCtor) {
-        if (root_1.root.Rx && root_1.root.Rx.config && root_1.root.Rx.config.Promise) {
-            PromiseCtor = root_1.root.Rx.config.Promise;
-        }
-        else if (root_1.root.Promise) {
-            PromiseCtor = root_1.root.Promise;
-        }
-    }
-    if (!PromiseCtor) {
-        throw new Error('no Promise impl found');
-    }
-    return new PromiseCtor(function (resolve, reject) {
-        var value;
-        _this.subscribe(function (x) { return value = x; }, function (err) { return reject(err); }, function () { return resolve(value); });
-    });
-}
-exports.toPromise = toPromise;
-
-},{"../util/root":454}],400:[function(require,module,exports){
+},{"./reduce":184}],217:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32201,7 +25354,9 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function window(windowBoundaries) {
-    return this.lift(new WindowOperator(windowBoundaries));
+    return function windowOperatorFunction(source) {
+        return source.lift(new WindowOperator(windowBoundaries));
+    };
 }
 exports.window = window;
 var WindowOperator = (function () {
@@ -32265,7 +25420,7 @@ var WindowSubscriber = (function (_super) {
     return WindowSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subject":120,"../util/subscribeToResult":455}],401:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subject":95,"../util/subscribeToResult":258}],218:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32324,7 +25479,9 @@ var Subject_1 = require('../Subject');
  */
 function windowCount(windowSize, startWindowEvery) {
     if (startWindowEvery === void 0) { startWindowEvery = 0; }
-    return this.lift(new WindowCountOperator(windowSize, startWindowEvery));
+    return function windowCountOperatorFunction(source) {
+        return source.lift(new WindowCountOperator(windowSize, startWindowEvery));
+    };
 }
 exports.windowCount = windowCount;
 var WindowCountOperator = (function () {
@@ -32397,7 +25554,7 @@ var WindowCountSubscriber = (function (_super) {
     return WindowCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subject":120,"../Subscriber":122}],402:[function(require,module,exports){
+},{"../Subject":95,"../Subscriber":97}],219:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32428,7 +25585,9 @@ function windowTime(windowTimeSpan) {
     else if (isNumeric_1.isNumeric(arguments[1])) {
         windowCreationInterval = arguments[1];
     }
-    return this.lift(new WindowTimeOperator(windowTimeSpan, windowCreationInterval, maxWindowSize, scheduler));
+    return function windowTimeOperatorFunction(source) {
+        return source.lift(new WindowTimeOperator(windowTimeSpan, windowCreationInterval, maxWindowSize, scheduler));
+    };
 }
 exports.windowTime = windowTime;
 var WindowTimeOperator = (function () {
@@ -32559,7 +25718,7 @@ function dispatchWindowClose(state) {
     subscriber.closeWindow(window);
 }
 
-},{"../Subject":120,"../Subscriber":122,"../scheduler/async":420,"../util/isNumeric":448,"../util/isScheduler":451}],403:[function(require,module,exports){
+},{"../Subject":95,"../Subscriber":97,"../scheduler/async":230,"../util/isNumeric":250,"../util/isScheduler":253}],220:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32614,7 +25773,7 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function windowToggle(openings, closingSelector) {
-    return this.lift(new WindowToggleOperator(openings, closingSelector));
+    return function (source) { return source.lift(new WindowToggleOperator(openings, closingSelector)); };
 }
 exports.windowToggle = windowToggle;
 var WindowToggleOperator = (function () {
@@ -32740,7 +25899,7 @@ var WindowToggleSubscriber = (function (_super) {
     return WindowToggleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subject":120,"../Subscription":123,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],404:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subject":95,"../Subscription":98,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],221:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32791,7 +25950,9 @@ var subscribeToResult_1 = require('../util/subscribeToResult');
  * @owner Observable
  */
 function windowWhen(closingSelector) {
-    return this.lift(new WindowOperator(closingSelector));
+    return function windowWhenOperatorFunction(source) {
+        return source.lift(new WindowOperator(closingSelector));
+    };
 }
 exports.windowWhen = windowWhen;
 var WindowOperator = (function () {
@@ -32868,7 +26029,7 @@ var WindowSubscriber = (function (_super) {
     return WindowSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subject":120,"../util/errorObject":443,"../util/subscribeToResult":455,"../util/tryCatch":457}],405:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subject":95,"../util/errorObject":244,"../util/subscribeToResult":258,"../util/tryCatch":260}],222:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32921,12 +26082,14 @@ function withLatestFrom() {
     for (var _i = 0; _i < arguments.length; _i++) {
         args[_i - 0] = arguments[_i];
     }
-    var project;
-    if (typeof args[args.length - 1] === 'function') {
-        project = args.pop();
-    }
-    var observables = args;
-    return this.lift(new WithLatestFromOperator(observables, project));
+    return function (source) {
+        var project;
+        if (typeof args[args.length - 1] === 'function') {
+            project = args.pop();
+        }
+        var observables = args;
+        return source.lift(new WithLatestFromOperator(observables, project));
+    };
 }
 exports.withLatestFrom = withLatestFrom;
 var WithLatestFromOperator = (function () {
@@ -32999,7 +26162,7 @@ var WithLatestFromSubscriber = (function (_super) {
     return WithLatestFromSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../util/subscribeToResult":455}],406:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../util/subscribeToResult":258}],223:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33019,14 +26182,16 @@ var iterator_1 = require('../symbol/iterator');
  * @method zip
  * @owner Observable
  */
-function zipProto() {
+function zip() {
     var observables = [];
     for (var _i = 0; _i < arguments.length; _i++) {
         observables[_i - 0] = arguments[_i];
     }
-    return this.lift.call(zipStatic.apply(void 0, [this].concat(observables)));
+    return function zipOperatorFunction(source) {
+        return source.lift.call(zipStatic.apply(void 0, [source].concat(observables)));
+    };
 }
-exports.zipProto = zipProto;
+exports.zip = zip;
 /* tslint:enable:max-line-length */
 /**
  * Combines multiple Observables to create an Observable whose values are calculated from the values, in order, of each
@@ -33279,21 +26444,15 @@ var ZipBufferIterator = (function (_super) {
     return ZipBufferIterator;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":116,"../Subscriber":122,"../observable/ArrayObservable":254,"../symbol/iterator":422,"../util/isArray":444,"../util/subscribeToResult":455}],407:[function(require,module,exports){
+},{"../OuterSubscriber":92,"../Subscriber":97,"../observable/ArrayObservable":103,"../symbol/iterator":232,"../util/isArray":246,"../util/subscribeToResult":258}],224:[function(require,module,exports){
 "use strict";
 var zip_1 = require('./zip');
-/**
- * @param project
- * @return {Observable<R>|WebSocketSubject<T>|Observable<T>}
- * @method zipAll
- * @owner Observable
- */
 function zipAll(project) {
-    return this.lift(new zip_1.ZipOperator(project));
+    return function (source) { return source.lift(new zip_1.ZipOperator(project)); };
 }
 exports.zipAll = zipAll;
 
-},{"./zip":406}],408:[function(require,module,exports){
+},{"./zip":223}],225:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33338,195 +26497,7 @@ var Action = (function (_super) {
 }(Subscription_1.Subscription));
 exports.Action = Action;
 
-},{"../Subscription":123}],409:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var AsyncAction_1 = require('./AsyncAction');
-var AnimationFrame_1 = require('../util/AnimationFrame');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var AnimationFrameAction = (function (_super) {
-    __extends(AnimationFrameAction, _super);
-    function AnimationFrameAction(scheduler, work) {
-        _super.call(this, scheduler, work);
-        this.scheduler = scheduler;
-        this.work = work;
-    }
-    AnimationFrameAction.prototype.requestAsyncId = function (scheduler, id, delay) {
-        if (delay === void 0) { delay = 0; }
-        // If delay is greater than 0, request as an async action.
-        if (delay !== null && delay > 0) {
-            return _super.prototype.requestAsyncId.call(this, scheduler, id, delay);
-        }
-        // Push the action to the end of the scheduler queue.
-        scheduler.actions.push(this);
-        // If an animation frame has already been requested, don't request another
-        // one. If an animation frame hasn't been requested yet, request one. Return
-        // the current animation frame request id.
-        return scheduler.scheduled || (scheduler.scheduled = AnimationFrame_1.AnimationFrame.requestAnimationFrame(scheduler.flush.bind(scheduler, null)));
-    };
-    AnimationFrameAction.prototype.recycleAsyncId = function (scheduler, id, delay) {
-        if (delay === void 0) { delay = 0; }
-        // If delay exists and is greater than 0, or if the delay is null (the
-        // action wasn't rescheduled) but was originally scheduled as an async
-        // action, then recycle as an async action.
-        if ((delay !== null && delay > 0) || (delay === null && this.delay > 0)) {
-            return _super.prototype.recycleAsyncId.call(this, scheduler, id, delay);
-        }
-        // If the scheduler queue is empty, cancel the requested animation frame and
-        // set the scheduled flag to undefined so the next AnimationFrameAction will
-        // request its own.
-        if (scheduler.actions.length === 0) {
-            AnimationFrame_1.AnimationFrame.cancelAnimationFrame(id);
-            scheduler.scheduled = undefined;
-        }
-        // Return undefined so the action knows to request a new async id if it's rescheduled.
-        return undefined;
-    };
-    return AnimationFrameAction;
-}(AsyncAction_1.AsyncAction));
-exports.AnimationFrameAction = AnimationFrameAction;
-
-},{"../util/AnimationFrame":430,"./AsyncAction":413}],410:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var AsyncScheduler_1 = require('./AsyncScheduler');
-var AnimationFrameScheduler = (function (_super) {
-    __extends(AnimationFrameScheduler, _super);
-    function AnimationFrameScheduler() {
-        _super.apply(this, arguments);
-    }
-    AnimationFrameScheduler.prototype.flush = function (action) {
-        this.active = true;
-        this.scheduled = undefined;
-        var actions = this.actions;
-        var error;
-        var index = -1;
-        var count = actions.length;
-        action = action || actions.shift();
-        do {
-            if (error = action.execute(action.state, action.delay)) {
-                break;
-            }
-        } while (++index < count && (action = actions.shift()));
-        this.active = false;
-        if (error) {
-            while (++index < count && (action = actions.shift())) {
-                action.unsubscribe();
-            }
-            throw error;
-        }
-    };
-    return AnimationFrameScheduler;
-}(AsyncScheduler_1.AsyncScheduler));
-exports.AnimationFrameScheduler = AnimationFrameScheduler;
-
-},{"./AsyncScheduler":414}],411:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Immediate_1 = require('../util/Immediate');
-var AsyncAction_1 = require('./AsyncAction');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var AsapAction = (function (_super) {
-    __extends(AsapAction, _super);
-    function AsapAction(scheduler, work) {
-        _super.call(this, scheduler, work);
-        this.scheduler = scheduler;
-        this.work = work;
-    }
-    AsapAction.prototype.requestAsyncId = function (scheduler, id, delay) {
-        if (delay === void 0) { delay = 0; }
-        // If delay is greater than 0, request as an async action.
-        if (delay !== null && delay > 0) {
-            return _super.prototype.requestAsyncId.call(this, scheduler, id, delay);
-        }
-        // Push the action to the end of the scheduler queue.
-        scheduler.actions.push(this);
-        // If a microtask has already been scheduled, don't schedule another
-        // one. If a microtask hasn't been scheduled yet, schedule one now. Return
-        // the current scheduled microtask id.
-        return scheduler.scheduled || (scheduler.scheduled = Immediate_1.Immediate.setImmediate(scheduler.flush.bind(scheduler, null)));
-    };
-    AsapAction.prototype.recycleAsyncId = function (scheduler, id, delay) {
-        if (delay === void 0) { delay = 0; }
-        // If delay exists and is greater than 0, or if the delay is null (the
-        // action wasn't rescheduled) but was originally scheduled as an async
-        // action, then recycle as an async action.
-        if ((delay !== null && delay > 0) || (delay === null && this.delay > 0)) {
-            return _super.prototype.recycleAsyncId.call(this, scheduler, id, delay);
-        }
-        // If the scheduler queue is empty, cancel the requested microtask and
-        // set the scheduled flag to undefined so the next AsapAction will schedule
-        // its own.
-        if (scheduler.actions.length === 0) {
-            Immediate_1.Immediate.clearImmediate(id);
-            scheduler.scheduled = undefined;
-        }
-        // Return undefined so the action knows to request a new async id if it's rescheduled.
-        return undefined;
-    };
-    return AsapAction;
-}(AsyncAction_1.AsyncAction));
-exports.AsapAction = AsapAction;
-
-},{"../util/Immediate":434,"./AsyncAction":413}],412:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var AsyncScheduler_1 = require('./AsyncScheduler');
-var AsapScheduler = (function (_super) {
-    __extends(AsapScheduler, _super);
-    function AsapScheduler() {
-        _super.apply(this, arguments);
-    }
-    AsapScheduler.prototype.flush = function (action) {
-        this.active = true;
-        this.scheduled = undefined;
-        var actions = this.actions;
-        var error;
-        var index = -1;
-        var count = actions.length;
-        action = action || actions.shift();
-        do {
-            if (error = action.execute(action.state, action.delay)) {
-                break;
-            }
-        } while (++index < count && (action = actions.shift()));
-        this.active = false;
-        if (error) {
-            while (++index < count && (action = actions.shift())) {
-                action.unsubscribe();
-            }
-            throw error;
-        }
-    };
-    return AsapScheduler;
-}(AsyncScheduler_1.AsyncScheduler));
-exports.AsapScheduler = AsapScheduler;
-
-},{"./AsyncScheduler":414}],413:[function(require,module,exports){
+},{"../Subscription":98}],226:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33669,7 +26640,7 @@ var AsyncAction = (function (_super) {
 }(Action_1.Action));
 exports.AsyncAction = AsyncAction;
 
-},{"../util/root":454,"./Action":408}],414:[function(require,module,exports){
+},{"../util/root":257,"./Action":225}],227:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33721,7 +26692,7 @@ var AsyncScheduler = (function (_super) {
 }(Scheduler_1.Scheduler));
 exports.AsyncScheduler = AsyncScheduler;
 
-},{"../Scheduler":119}],415:[function(require,module,exports){
+},{"../Scheduler":94}],228:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33771,7 +26742,7 @@ var QueueAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.QueueAction = QueueAction;
 
-},{"./AsyncAction":413}],416:[function(require,module,exports){
+},{"./AsyncAction":226}],229:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33788,197 +26759,7 @@ var QueueScheduler = (function (_super) {
 }(AsyncScheduler_1.AsyncScheduler));
 exports.QueueScheduler = QueueScheduler;
 
-},{"./AsyncScheduler":414}],417:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var AsyncAction_1 = require('./AsyncAction');
-var AsyncScheduler_1 = require('./AsyncScheduler');
-var VirtualTimeScheduler = (function (_super) {
-    __extends(VirtualTimeScheduler, _super);
-    function VirtualTimeScheduler(SchedulerAction, maxFrames) {
-        var _this = this;
-        if (SchedulerAction === void 0) { SchedulerAction = VirtualAction; }
-        if (maxFrames === void 0) { maxFrames = Number.POSITIVE_INFINITY; }
-        _super.call(this, SchedulerAction, function () { return _this.frame; });
-        this.maxFrames = maxFrames;
-        this.frame = 0;
-        this.index = -1;
-    }
-    /**
-     * Prompt the Scheduler to execute all of its queued actions, therefore
-     * clearing its queue.
-     * @return {void}
-     */
-    VirtualTimeScheduler.prototype.flush = function () {
-        var _a = this, actions = _a.actions, maxFrames = _a.maxFrames;
-        var error, action;
-        while ((action = actions.shift()) && (this.frame = action.delay) <= maxFrames) {
-            if (error = action.execute(action.state, action.delay)) {
-                break;
-            }
-        }
-        if (error) {
-            while (action = actions.shift()) {
-                action.unsubscribe();
-            }
-            throw error;
-        }
-    };
-    VirtualTimeScheduler.frameTimeFactor = 10;
-    return VirtualTimeScheduler;
-}(AsyncScheduler_1.AsyncScheduler));
-exports.VirtualTimeScheduler = VirtualTimeScheduler;
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var VirtualAction = (function (_super) {
-    __extends(VirtualAction, _super);
-    function VirtualAction(scheduler, work, index) {
-        if (index === void 0) { index = scheduler.index += 1; }
-        _super.call(this, scheduler, work);
-        this.scheduler = scheduler;
-        this.work = work;
-        this.index = index;
-        this.active = true;
-        this.index = scheduler.index = index;
-    }
-    VirtualAction.prototype.schedule = function (state, delay) {
-        if (delay === void 0) { delay = 0; }
-        if (!this.id) {
-            return _super.prototype.schedule.call(this, state, delay);
-        }
-        this.active = false;
-        // If an action is rescheduled, we save allocations by mutating its state,
-        // pushing it to the end of the scheduler queue, and recycling the action.
-        // But since the VirtualTimeScheduler is used for testing, VirtualActions
-        // must be immutable so they can be inspected later.
-        var action = new VirtualAction(this.scheduler, this.work);
-        this.add(action);
-        return action.schedule(state, delay);
-    };
-    VirtualAction.prototype.requestAsyncId = function (scheduler, id, delay) {
-        if (delay === void 0) { delay = 0; }
-        this.delay = scheduler.frame + delay;
-        var actions = scheduler.actions;
-        actions.push(this);
-        actions.sort(VirtualAction.sortActions);
-        return true;
-    };
-    VirtualAction.prototype.recycleAsyncId = function (scheduler, id, delay) {
-        if (delay === void 0) { delay = 0; }
-        return undefined;
-    };
-    VirtualAction.prototype._execute = function (state, delay) {
-        if (this.active === true) {
-            return _super.prototype._execute.call(this, state, delay);
-        }
-    };
-    VirtualAction.sortActions = function (a, b) {
-        if (a.delay === b.delay) {
-            if (a.index === b.index) {
-                return 0;
-            }
-            else if (a.index > b.index) {
-                return 1;
-            }
-            else {
-                return -1;
-            }
-        }
-        else if (a.delay > b.delay) {
-            return 1;
-        }
-        else {
-            return -1;
-        }
-    };
-    return VirtualAction;
-}(AsyncAction_1.AsyncAction));
-exports.VirtualAction = VirtualAction;
-
-},{"./AsyncAction":413,"./AsyncScheduler":414}],418:[function(require,module,exports){
-"use strict";
-var AnimationFrameAction_1 = require('./AnimationFrameAction');
-var AnimationFrameScheduler_1 = require('./AnimationFrameScheduler');
-/**
- *
- * Animation Frame Scheduler
- *
- * <span class="informal">Perform task when `window.requestAnimationFrame` would fire</span>
- *
- * When `animationFrame` scheduler is used with delay, it will fall back to {@link async} scheduler
- * behaviour.
- *
- * Without delay, `animationFrame` scheduler can be used to create smooth browser animations.
- * It makes sure scheduled task will happen just before next browser content repaint,
- * thus performing animations as efficiently as possible.
- *
- * @example <caption>Schedule div height animation</caption>
- * const div = document.querySelector('.some-div');
- *
- * Rx.Scheduler.schedule(function(height) {
- *   div.style.height = height + "px";
- *
- *   this.schedule(height + 1);  // `this` references currently executing Action,
- *                               // which we reschedule with new state
- * }, 0, 0);
- *
- * // You will see .some-div element growing in height
- *
- *
- * @static true
- * @name animationFrame
- * @owner Scheduler
- */
-exports.animationFrame = new AnimationFrameScheduler_1.AnimationFrameScheduler(AnimationFrameAction_1.AnimationFrameAction);
-
-},{"./AnimationFrameAction":409,"./AnimationFrameScheduler":410}],419:[function(require,module,exports){
-"use strict";
-var AsapAction_1 = require('./AsapAction');
-var AsapScheduler_1 = require('./AsapScheduler');
-/**
- *
- * Asap Scheduler
- *
- * <span class="informal">Perform task as fast as it can be performed asynchronously</span>
- *
- * `asap` scheduler behaves the same as {@link async} scheduler when you use it to delay task
- * in time. If however you set delay to `0`, `asap` will wait for current synchronously executing
- * code to end and then it will try to execute given task as fast as possible.
- *
- * `asap` scheduler will do its best to minimize time between end of currently executing code
- * and start of scheduled task. This makes it best candidate for performing so called "deferring".
- * Traditionally this was achieved by calling `setTimeout(deferredTask, 0)`, but that technique involves
- * some (although minimal) unwanted delay.
- *
- * Note that using `asap` scheduler does not necessarily mean that your task will be first to process
- * after currently executing code. In particular, if some task was also scheduled with `asap` before,
- * that task will execute first. That being said, if you need to schedule task asynchronously, but
- * as soon as possible, `asap` scheduler is your best bet.
- *
- * @example <caption>Compare async and asap scheduler</caption>
- *
- * Rx.Scheduler.async.schedule(() => console.log('async')); // scheduling 'async' first...
- * Rx.Scheduler.asap.schedule(() => console.log('asap'));
- *
- * // Logs:
- * // "asap"
- * // "async"
- * // ... but 'asap' goes first!
- *
- * @static true
- * @name asap
- * @owner Scheduler
- */
-exports.asap = new AsapScheduler_1.AsapScheduler(AsapAction_1.AsapAction);
-
-},{"./AsapAction":411,"./AsapScheduler":412}],420:[function(require,module,exports){
+},{"./AsyncScheduler":227}],230:[function(require,module,exports){
 "use strict";
 var AsyncAction_1 = require('./AsyncAction');
 var AsyncScheduler_1 = require('./AsyncScheduler');
@@ -34026,7 +26807,7 @@ var AsyncScheduler_1 = require('./AsyncScheduler');
  */
 exports.async = new AsyncScheduler_1.AsyncScheduler(AsyncAction_1.AsyncAction);
 
-},{"./AsyncAction":413,"./AsyncScheduler":414}],421:[function(require,module,exports){
+},{"./AsyncAction":226,"./AsyncScheduler":227}],231:[function(require,module,exports){
 "use strict";
 var QueueAction_1 = require('./QueueAction');
 var QueueScheduler_1 = require('./QueueScheduler');
@@ -34093,7 +26874,7 @@ var QueueScheduler_1 = require('./QueueScheduler');
  */
 exports.queue = new QueueScheduler_1.QueueScheduler(QueueAction_1.QueueAction);
 
-},{"./QueueAction":415,"./QueueScheduler":416}],422:[function(require,module,exports){
+},{"./QueueAction":228,"./QueueScheduler":229}],232:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function symbolIteratorPonyfill(root) {
@@ -34132,7 +26913,7 @@ exports.iterator = symbolIteratorPonyfill(root_1.root);
  */
 exports.$$iterator = exports.iterator;
 
-},{"../util/root":454}],423:[function(require,module,exports){
+},{"../util/root":257}],233:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function getSymbolObservable(context) {
@@ -34159,7 +26940,7 @@ exports.observable = getSymbolObservable(root_1.root);
  */
 exports.$$observable = exports.observable;
 
-},{"../util/root":454}],424:[function(require,module,exports){
+},{"../util/root":257}],234:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 var Symbol = root_1.root.Symbol;
@@ -34170,394 +26951,7 @@ exports.rxSubscriber = (typeof Symbol === 'function' && typeof Symbol.for === 'f
  */
 exports.$$rxSubscriber = exports.rxSubscriber;
 
-},{"../util/root":454}],425:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var Subscription_1 = require('../Subscription');
-var SubscriptionLoggable_1 = require('./SubscriptionLoggable');
-var applyMixins_1 = require('../util/applyMixins');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var ColdObservable = (function (_super) {
-    __extends(ColdObservable, _super);
-    function ColdObservable(messages, scheduler) {
-        _super.call(this, function (subscriber) {
-            var observable = this;
-            var index = observable.logSubscribedFrame();
-            subscriber.add(new Subscription_1.Subscription(function () {
-                observable.logUnsubscribedFrame(index);
-            }));
-            observable.scheduleMessages(subscriber);
-            return subscriber;
-        });
-        this.messages = messages;
-        this.subscriptions = [];
-        this.scheduler = scheduler;
-    }
-    ColdObservable.prototype.scheduleMessages = function (subscriber) {
-        var messagesLength = this.messages.length;
-        for (var i = 0; i < messagesLength; i++) {
-            var message = this.messages[i];
-            subscriber.add(this.scheduler.schedule(function (_a) {
-                var message = _a.message, subscriber = _a.subscriber;
-                message.notification.observe(subscriber);
-            }, message.frame, { message: message, subscriber: subscriber }));
-        }
-    };
-    return ColdObservable;
-}(Observable_1.Observable));
-exports.ColdObservable = ColdObservable;
-applyMixins_1.applyMixins(ColdObservable, [SubscriptionLoggable_1.SubscriptionLoggable]);
-
-},{"../Observable":114,"../Subscription":123,"../util/applyMixins":441,"./SubscriptionLoggable":428}],426:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Subject_1 = require('../Subject');
-var Subscription_1 = require('../Subscription');
-var SubscriptionLoggable_1 = require('./SubscriptionLoggable');
-var applyMixins_1 = require('../util/applyMixins');
-/**
- * We need this JSDoc comment for affecting ESDoc.
- * @ignore
- * @extends {Ignored}
- */
-var HotObservable = (function (_super) {
-    __extends(HotObservable, _super);
-    function HotObservable(messages, scheduler) {
-        _super.call(this);
-        this.messages = messages;
-        this.subscriptions = [];
-        this.scheduler = scheduler;
-    }
-    HotObservable.prototype._subscribe = function (subscriber) {
-        var subject = this;
-        var index = subject.logSubscribedFrame();
-        subscriber.add(new Subscription_1.Subscription(function () {
-            subject.logUnsubscribedFrame(index);
-        }));
-        return _super.prototype._subscribe.call(this, subscriber);
-    };
-    HotObservable.prototype.setup = function () {
-        var subject = this;
-        var messagesLength = subject.messages.length;
-        /* tslint:disable:no-var-keyword */
-        for (var i = 0; i < messagesLength; i++) {
-            (function () {
-                var message = subject.messages[i];
-                /* tslint:enable */
-                subject.scheduler.schedule(function () { message.notification.observe(subject); }, message.frame);
-            })();
-        }
-    };
-    return HotObservable;
-}(Subject_1.Subject));
-exports.HotObservable = HotObservable;
-applyMixins_1.applyMixins(HotObservable, [SubscriptionLoggable_1.SubscriptionLoggable]);
-
-},{"../Subject":120,"../Subscription":123,"../util/applyMixins":441,"./SubscriptionLoggable":428}],427:[function(require,module,exports){
-"use strict";
-var SubscriptionLog = (function () {
-    function SubscriptionLog(subscribedFrame, unsubscribedFrame) {
-        if (unsubscribedFrame === void 0) { unsubscribedFrame = Number.POSITIVE_INFINITY; }
-        this.subscribedFrame = subscribedFrame;
-        this.unsubscribedFrame = unsubscribedFrame;
-    }
-    return SubscriptionLog;
-}());
-exports.SubscriptionLog = SubscriptionLog;
-
-},{}],428:[function(require,module,exports){
-"use strict";
-var SubscriptionLog_1 = require('./SubscriptionLog');
-var SubscriptionLoggable = (function () {
-    function SubscriptionLoggable() {
-        this.subscriptions = [];
-    }
-    SubscriptionLoggable.prototype.logSubscribedFrame = function () {
-        this.subscriptions.push(new SubscriptionLog_1.SubscriptionLog(this.scheduler.now()));
-        return this.subscriptions.length - 1;
-    };
-    SubscriptionLoggable.prototype.logUnsubscribedFrame = function (index) {
-        var subscriptionLogs = this.subscriptions;
-        var oldSubscriptionLog = subscriptionLogs[index];
-        subscriptionLogs[index] = new SubscriptionLog_1.SubscriptionLog(oldSubscriptionLog.subscribedFrame, this.scheduler.now());
-    };
-    return SubscriptionLoggable;
-}());
-exports.SubscriptionLoggable = SubscriptionLoggable;
-
-},{"./SubscriptionLog":427}],429:[function(require,module,exports){
-"use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var Observable_1 = require('../Observable');
-var Notification_1 = require('../Notification');
-var ColdObservable_1 = require('./ColdObservable');
-var HotObservable_1 = require('./HotObservable');
-var SubscriptionLog_1 = require('./SubscriptionLog');
-var VirtualTimeScheduler_1 = require('../scheduler/VirtualTimeScheduler');
-var defaultMaxFrame = 750;
-var TestScheduler = (function (_super) {
-    __extends(TestScheduler, _super);
-    function TestScheduler(assertDeepEqual) {
-        _super.call(this, VirtualTimeScheduler_1.VirtualAction, defaultMaxFrame);
-        this.assertDeepEqual = assertDeepEqual;
-        this.hotObservables = [];
-        this.coldObservables = [];
-        this.flushTests = [];
-    }
-    TestScheduler.prototype.createTime = function (marbles) {
-        var indexOf = marbles.indexOf('|');
-        if (indexOf === -1) {
-            throw new Error('marble diagram for time should have a completion marker "|"');
-        }
-        return indexOf * TestScheduler.frameTimeFactor;
-    };
-    TestScheduler.prototype.createColdObservable = function (marbles, values, error) {
-        if (marbles.indexOf('^') !== -1) {
-            throw new Error('cold observable cannot have subscription offset "^"');
-        }
-        if (marbles.indexOf('!') !== -1) {
-            throw new Error('cold observable cannot have unsubscription marker "!"');
-        }
-        var messages = TestScheduler.parseMarbles(marbles, values, error);
-        var cold = new ColdObservable_1.ColdObservable(messages, this);
-        this.coldObservables.push(cold);
-        return cold;
-    };
-    TestScheduler.prototype.createHotObservable = function (marbles, values, error) {
-        if (marbles.indexOf('!') !== -1) {
-            throw new Error('hot observable cannot have unsubscription marker "!"');
-        }
-        var messages = TestScheduler.parseMarbles(marbles, values, error);
-        var subject = new HotObservable_1.HotObservable(messages, this);
-        this.hotObservables.push(subject);
-        return subject;
-    };
-    TestScheduler.prototype.materializeInnerObservable = function (observable, outerFrame) {
-        var _this = this;
-        var messages = [];
-        observable.subscribe(function (value) {
-            messages.push({ frame: _this.frame - outerFrame, notification: Notification_1.Notification.createNext(value) });
-        }, function (err) {
-            messages.push({ frame: _this.frame - outerFrame, notification: Notification_1.Notification.createError(err) });
-        }, function () {
-            messages.push({ frame: _this.frame - outerFrame, notification: Notification_1.Notification.createComplete() });
-        });
-        return messages;
-    };
-    TestScheduler.prototype.expectObservable = function (observable, unsubscriptionMarbles) {
-        var _this = this;
-        if (unsubscriptionMarbles === void 0) { unsubscriptionMarbles = null; }
-        var actual = [];
-        var flushTest = { actual: actual, ready: false };
-        var unsubscriptionFrame = TestScheduler
-            .parseMarblesAsSubscriptions(unsubscriptionMarbles).unsubscribedFrame;
-        var subscription;
-        this.schedule(function () {
-            subscription = observable.subscribe(function (x) {
-                var value = x;
-                // Support Observable-of-Observables
-                if (x instanceof Observable_1.Observable) {
-                    value = _this.materializeInnerObservable(value, _this.frame);
-                }
-                actual.push({ frame: _this.frame, notification: Notification_1.Notification.createNext(value) });
-            }, function (err) {
-                actual.push({ frame: _this.frame, notification: Notification_1.Notification.createError(err) });
-            }, function () {
-                actual.push({ frame: _this.frame, notification: Notification_1.Notification.createComplete() });
-            });
-        }, 0);
-        if (unsubscriptionFrame !== Number.POSITIVE_INFINITY) {
-            this.schedule(function () { return subscription.unsubscribe(); }, unsubscriptionFrame);
-        }
-        this.flushTests.push(flushTest);
-        return {
-            toBe: function (marbles, values, errorValue) {
-                flushTest.ready = true;
-                flushTest.expected = TestScheduler.parseMarbles(marbles, values, errorValue, true);
-            }
-        };
-    };
-    TestScheduler.prototype.expectSubscriptions = function (actualSubscriptionLogs) {
-        var flushTest = { actual: actualSubscriptionLogs, ready: false };
-        this.flushTests.push(flushTest);
-        return {
-            toBe: function (marbles) {
-                var marblesArray = (typeof marbles === 'string') ? [marbles] : marbles;
-                flushTest.ready = true;
-                flushTest.expected = marblesArray.map(function (marbles) {
-                    return TestScheduler.parseMarblesAsSubscriptions(marbles);
-                });
-            }
-        };
-    };
-    TestScheduler.prototype.flush = function () {
-        var hotObservables = this.hotObservables;
-        while (hotObservables.length > 0) {
-            hotObservables.shift().setup();
-        }
-        _super.prototype.flush.call(this);
-        var readyFlushTests = this.flushTests.filter(function (test) { return test.ready; });
-        while (readyFlushTests.length > 0) {
-            var test = readyFlushTests.shift();
-            this.assertDeepEqual(test.actual, test.expected);
-        }
-    };
-    TestScheduler.parseMarblesAsSubscriptions = function (marbles) {
-        if (typeof marbles !== 'string') {
-            return new SubscriptionLog_1.SubscriptionLog(Number.POSITIVE_INFINITY);
-        }
-        var len = marbles.length;
-        var groupStart = -1;
-        var subscriptionFrame = Number.POSITIVE_INFINITY;
-        var unsubscriptionFrame = Number.POSITIVE_INFINITY;
-        for (var i = 0; i < len; i++) {
-            var frame = i * this.frameTimeFactor;
-            var c = marbles[i];
-            switch (c) {
-                case '-':
-                case ' ':
-                    break;
-                case '(':
-                    groupStart = frame;
-                    break;
-                case ')':
-                    groupStart = -1;
-                    break;
-                case '^':
-                    if (subscriptionFrame !== Number.POSITIVE_INFINITY) {
-                        throw new Error('found a second subscription point \'^\' in a ' +
-                            'subscription marble diagram. There can only be one.');
-                    }
-                    subscriptionFrame = groupStart > -1 ? groupStart : frame;
-                    break;
-                case '!':
-                    if (unsubscriptionFrame !== Number.POSITIVE_INFINITY) {
-                        throw new Error('found a second subscription point \'^\' in a ' +
-                            'subscription marble diagram. There can only be one.');
-                    }
-                    unsubscriptionFrame = groupStart > -1 ? groupStart : frame;
-                    break;
-                default:
-                    throw new Error('there can only be \'^\' and \'!\' markers in a ' +
-                        'subscription marble diagram. Found instead \'' + c + '\'.');
-            }
-        }
-        if (unsubscriptionFrame < 0) {
-            return new SubscriptionLog_1.SubscriptionLog(subscriptionFrame);
-        }
-        else {
-            return new SubscriptionLog_1.SubscriptionLog(subscriptionFrame, unsubscriptionFrame);
-        }
-    };
-    TestScheduler.parseMarbles = function (marbles, values, errorValue, materializeInnerObservables) {
-        if (materializeInnerObservables === void 0) { materializeInnerObservables = false; }
-        if (marbles.indexOf('!') !== -1) {
-            throw new Error('conventional marble diagrams cannot have the ' +
-                'unsubscription marker "!"');
-        }
-        var len = marbles.length;
-        var testMessages = [];
-        var subIndex = marbles.indexOf('^');
-        var frameOffset = subIndex === -1 ? 0 : (subIndex * -this.frameTimeFactor);
-        var getValue = typeof values !== 'object' ?
-            function (x) { return x; } :
-            function (x) {
-                // Support Observable-of-Observables
-                if (materializeInnerObservables && values[x] instanceof ColdObservable_1.ColdObservable) {
-                    return values[x].messages;
-                }
-                return values[x];
-            };
-        var groupStart = -1;
-        for (var i = 0; i < len; i++) {
-            var frame = i * this.frameTimeFactor + frameOffset;
-            var notification = void 0;
-            var c = marbles[i];
-            switch (c) {
-                case '-':
-                case ' ':
-                    break;
-                case '(':
-                    groupStart = frame;
-                    break;
-                case ')':
-                    groupStart = -1;
-                    break;
-                case '|':
-                    notification = Notification_1.Notification.createComplete();
-                    break;
-                case '^':
-                    break;
-                case '#':
-                    notification = Notification_1.Notification.createError(errorValue || 'error');
-                    break;
-                default:
-                    notification = Notification_1.Notification.createNext(getValue(c));
-                    break;
-            }
-            if (notification) {
-                testMessages.push({ frame: groupStart > -1 ? groupStart : frame, notification: notification });
-            }
-        }
-        return testMessages;
-    };
-    return TestScheduler;
-}(VirtualTimeScheduler_1.VirtualTimeScheduler));
-exports.TestScheduler = TestScheduler;
-
-},{"../Notification":113,"../Observable":114,"../scheduler/VirtualTimeScheduler":417,"./ColdObservable":425,"./HotObservable":426,"./SubscriptionLog":427}],430:[function(require,module,exports){
-"use strict";
-var root_1 = require('./root');
-var RequestAnimationFrameDefinition = (function () {
-    function RequestAnimationFrameDefinition(root) {
-        if (root.requestAnimationFrame) {
-            this.cancelAnimationFrame = root.cancelAnimationFrame.bind(root);
-            this.requestAnimationFrame = root.requestAnimationFrame.bind(root);
-        }
-        else if (root.mozRequestAnimationFrame) {
-            this.cancelAnimationFrame = root.mozCancelAnimationFrame.bind(root);
-            this.requestAnimationFrame = root.mozRequestAnimationFrame.bind(root);
-        }
-        else if (root.webkitRequestAnimationFrame) {
-            this.cancelAnimationFrame = root.webkitCancelAnimationFrame.bind(root);
-            this.requestAnimationFrame = root.webkitRequestAnimationFrame.bind(root);
-        }
-        else if (root.msRequestAnimationFrame) {
-            this.cancelAnimationFrame = root.msCancelAnimationFrame.bind(root);
-            this.requestAnimationFrame = root.msRequestAnimationFrame.bind(root);
-        }
-        else if (root.oRequestAnimationFrame) {
-            this.cancelAnimationFrame = root.oCancelAnimationFrame.bind(root);
-            this.requestAnimationFrame = root.oRequestAnimationFrame.bind(root);
-        }
-        else {
-            this.cancelAnimationFrame = root.clearTimeout.bind(root);
-            this.requestAnimationFrame = function (cb) { return root.setTimeout(cb, 1000 / 60); };
-        }
-    }
-    return RequestAnimationFrameDefinition;
-}());
-exports.RequestAnimationFrameDefinition = RequestAnimationFrameDefinition;
-exports.AnimationFrame = new RequestAnimationFrameDefinition(root_1.root);
-
-},{"./root":454}],431:[function(require,module,exports){
+},{"../util/root":257}],235:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34586,7 +26980,7 @@ var ArgumentOutOfRangeError = (function (_super) {
 }(Error));
 exports.ArgumentOutOfRangeError = ArgumentOutOfRangeError;
 
-},{}],432:[function(require,module,exports){
+},{}],236:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34615,7 +27009,7 @@ var EmptyError = (function (_super) {
 }(Error));
 exports.EmptyError = EmptyError;
 
-},{}],433:[function(require,module,exports){
+},{}],237:[function(require,module,exports){
 "use strict";
 var FastMap = (function () {
     function FastMap() {
@@ -34647,223 +27041,13 @@ var FastMap = (function () {
 }());
 exports.FastMap = FastMap;
 
-},{}],434:[function(require,module,exports){
-/**
-Some credit for this helper goes to http://github.com/YuzuJS/setImmediate
-*/
-"use strict";
-var root_1 = require('./root');
-var ImmediateDefinition = (function () {
-    function ImmediateDefinition(root) {
-        this.root = root;
-        if (root.setImmediate && typeof root.setImmediate === 'function') {
-            this.setImmediate = root.setImmediate.bind(root);
-            this.clearImmediate = root.clearImmediate.bind(root);
-        }
-        else {
-            this.nextHandle = 1;
-            this.tasksByHandle = {};
-            this.currentlyRunningATask = false;
-            // Don't get fooled by e.g. browserify environments.
-            if (this.canUseProcessNextTick()) {
-                // For Node.js before 0.9
-                this.setImmediate = this.createProcessNextTickSetImmediate();
-            }
-            else if (this.canUsePostMessage()) {
-                // For non-IE10 modern browsers
-                this.setImmediate = this.createPostMessageSetImmediate();
-            }
-            else if (this.canUseMessageChannel()) {
-                // For web workers, where supported
-                this.setImmediate = this.createMessageChannelSetImmediate();
-            }
-            else if (this.canUseReadyStateChange()) {
-                // For IE 6–8
-                this.setImmediate = this.createReadyStateChangeSetImmediate();
-            }
-            else {
-                // For older browsers
-                this.setImmediate = this.createSetTimeoutSetImmediate();
-            }
-            var ci = function clearImmediate(handle) {
-                delete clearImmediate.instance.tasksByHandle[handle];
-            };
-            ci.instance = this;
-            this.clearImmediate = ci;
-        }
-    }
-    ImmediateDefinition.prototype.identify = function (o) {
-        return this.root.Object.prototype.toString.call(o);
-    };
-    ImmediateDefinition.prototype.canUseProcessNextTick = function () {
-        return this.identify(this.root.process) === '[object process]';
-    };
-    ImmediateDefinition.prototype.canUseMessageChannel = function () {
-        return Boolean(this.root.MessageChannel);
-    };
-    ImmediateDefinition.prototype.canUseReadyStateChange = function () {
-        var document = this.root.document;
-        return Boolean(document && 'onreadystatechange' in document.createElement('script'));
-    };
-    ImmediateDefinition.prototype.canUsePostMessage = function () {
-        var root = this.root;
-        // The test against `importScripts` prevents this implementation from being installed inside a web worker,
-        // where `root.postMessage` means something completely different and can't be used for this purpose.
-        if (root.postMessage && !root.importScripts) {
-            var postMessageIsAsynchronous_1 = true;
-            var oldOnMessage = root.onmessage;
-            root.onmessage = function () {
-                postMessageIsAsynchronous_1 = false;
-            };
-            root.postMessage('', '*');
-            root.onmessage = oldOnMessage;
-            return postMessageIsAsynchronous_1;
-        }
-        return false;
-    };
-    // This function accepts the same arguments as setImmediate, but
-    // returns a function that requires no arguments.
-    ImmediateDefinition.prototype.partiallyApplied = function (handler) {
-        var args = [];
-        for (var _i = 1; _i < arguments.length; _i++) {
-            args[_i - 1] = arguments[_i];
-        }
-        var fn = function result() {
-            var _a = result, handler = _a.handler, args = _a.args;
-            if (typeof handler === 'function') {
-                handler.apply(undefined, args);
-            }
-            else {
-                (new Function('' + handler))();
-            }
-        };
-        fn.handler = handler;
-        fn.args = args;
-        return fn;
-    };
-    ImmediateDefinition.prototype.addFromSetImmediateArguments = function (args) {
-        this.tasksByHandle[this.nextHandle] = this.partiallyApplied.apply(undefined, args);
-        return this.nextHandle++;
-    };
-    ImmediateDefinition.prototype.createProcessNextTickSetImmediate = function () {
-        var fn = function setImmediate() {
-            var instance = setImmediate.instance;
-            var handle = instance.addFromSetImmediateArguments(arguments);
-            instance.root.process.nextTick(instance.partiallyApplied(instance.runIfPresent, handle));
-            return handle;
-        };
-        fn.instance = this;
-        return fn;
-    };
-    ImmediateDefinition.prototype.createPostMessageSetImmediate = function () {
-        // Installs an event handler on `global` for the `message` event: see
-        // * https://developer.mozilla.org/en/DOM/window.postMessage
-        // * http://www.whatwg.org/specs/web-apps/current-work/multipage/comms.html#crossDocumentMessages
-        var root = this.root;
-        var messagePrefix = 'setImmediate$' + root.Math.random() + '$';
-        var onGlobalMessage = function globalMessageHandler(event) {
-            var instance = globalMessageHandler.instance;
-            if (event.source === root &&
-                typeof event.data === 'string' &&
-                event.data.indexOf(messagePrefix) === 0) {
-                instance.runIfPresent(+event.data.slice(messagePrefix.length));
-            }
-        };
-        onGlobalMessage.instance = this;
-        root.addEventListener('message', onGlobalMessage, false);
-        var fn = function setImmediate() {
-            var _a = setImmediate, messagePrefix = _a.messagePrefix, instance = _a.instance;
-            var handle = instance.addFromSetImmediateArguments(arguments);
-            instance.root.postMessage(messagePrefix + handle, '*');
-            return handle;
-        };
-        fn.instance = this;
-        fn.messagePrefix = messagePrefix;
-        return fn;
-    };
-    ImmediateDefinition.prototype.runIfPresent = function (handle) {
-        // From the spec: 'Wait until any invocations of this algorithm started before this one have completed.'
-        // So if we're currently running a task, we'll need to delay this invocation.
-        if (this.currentlyRunningATask) {
-            // Delay by doing a setTimeout. setImmediate was tried instead, but in Firefox 7 it generated a
-            // 'too much recursion' error.
-            this.root.setTimeout(this.partiallyApplied(this.runIfPresent, handle), 0);
-        }
-        else {
-            var task = this.tasksByHandle[handle];
-            if (task) {
-                this.currentlyRunningATask = true;
-                try {
-                    task();
-                }
-                finally {
-                    this.clearImmediate(handle);
-                    this.currentlyRunningATask = false;
-                }
-            }
-        }
-    };
-    ImmediateDefinition.prototype.createMessageChannelSetImmediate = function () {
-        var _this = this;
-        var channel = new this.root.MessageChannel();
-        channel.port1.onmessage = function (event) {
-            var handle = event.data;
-            _this.runIfPresent(handle);
-        };
-        var fn = function setImmediate() {
-            var _a = setImmediate, channel = _a.channel, instance = _a.instance;
-            var handle = instance.addFromSetImmediateArguments(arguments);
-            channel.port2.postMessage(handle);
-            return handle;
-        };
-        fn.channel = channel;
-        fn.instance = this;
-        return fn;
-    };
-    ImmediateDefinition.prototype.createReadyStateChangeSetImmediate = function () {
-        var fn = function setImmediate() {
-            var instance = setImmediate.instance;
-            var root = instance.root;
-            var doc = root.document;
-            var html = doc.documentElement;
-            var handle = instance.addFromSetImmediateArguments(arguments);
-            // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-            // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-            var script = doc.createElement('script');
-            script.onreadystatechange = function () {
-                instance.runIfPresent(handle);
-                script.onreadystatechange = null;
-                html.removeChild(script);
-                script = null;
-            };
-            html.appendChild(script);
-            return handle;
-        };
-        fn.instance = this;
-        return fn;
-    };
-    ImmediateDefinition.prototype.createSetTimeoutSetImmediate = function () {
-        var fn = function setImmediate() {
-            var instance = setImmediate.instance;
-            var handle = instance.addFromSetImmediateArguments(arguments);
-            instance.root.setTimeout(instance.partiallyApplied(instance.runIfPresent, handle), 0);
-            return handle;
-        };
-        fn.instance = this;
-        return fn;
-    };
-    return ImmediateDefinition;
-}());
-exports.ImmediateDefinition = ImmediateDefinition;
-exports.Immediate = new ImmediateDefinition(root_1.root);
-
-},{"./root":454}],435:[function(require,module,exports){
+},{}],238:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var MapPolyfill_1 = require('./MapPolyfill');
 exports.Map = root_1.root.Map || (function () { return MapPolyfill_1.MapPolyfill; })();
 
-},{"./MapPolyfill":436,"./root":454}],436:[function(require,module,exports){
+},{"./MapPolyfill":239,"./root":257}],239:[function(require,module,exports){
 "use strict";
 var MapPolyfill = (function () {
     function MapPolyfill() {
@@ -34911,7 +27095,7 @@ var MapPolyfill = (function () {
 }());
 exports.MapPolyfill = MapPolyfill;
 
-},{}],437:[function(require,module,exports){
+},{}],240:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34939,7 +27123,7 @@ var ObjectUnsubscribedError = (function (_super) {
 }(Error));
 exports.ObjectUnsubscribedError = ObjectUnsubscribedError;
 
-},{}],438:[function(require,module,exports){
+},{}],241:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 function minimalSetImpl() {
@@ -34973,7 +27157,7 @@ function minimalSetImpl() {
 exports.minimalSetImpl = minimalSetImpl;
 exports.Set = root_1.root.Set || minimalSetImpl();
 
-},{"./root":454}],439:[function(require,module,exports){
+},{"./root":257}],242:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34999,7 +27183,7 @@ var TimeoutError = (function (_super) {
 }(Error));
 exports.TimeoutError = TimeoutError;
 
-},{}],440:[function(require,module,exports){
+},{}],243:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -35025,75 +27209,41 @@ var UnsubscriptionError = (function (_super) {
 }(Error));
 exports.UnsubscriptionError = UnsubscriptionError;
 
-},{}],441:[function(require,module,exports){
-"use strict";
-function applyMixins(derivedCtor, baseCtors) {
-    for (var i = 0, len = baseCtors.length; i < len; i++) {
-        var baseCtor = baseCtors[i];
-        var propertyKeys = Object.getOwnPropertyNames(baseCtor.prototype);
-        for (var j = 0, len2 = propertyKeys.length; j < len2; j++) {
-            var name_1 = propertyKeys[j];
-            derivedCtor.prototype[name_1] = baseCtor.prototype[name_1];
-        }
-    }
-}
-exports.applyMixins = applyMixins;
-
-},{}],442:[function(require,module,exports){
-"use strict";
-var root_1 = require('./root');
-function assignImpl(target) {
-    var sources = [];
-    for (var _i = 1; _i < arguments.length; _i++) {
-        sources[_i - 1] = arguments[_i];
-    }
-    var len = sources.length;
-    for (var i = 0; i < len; i++) {
-        var source = sources[i];
-        for (var k in source) {
-            if (source.hasOwnProperty(k)) {
-                target[k] = source[k];
-            }
-        }
-    }
-    return target;
-}
-exports.assignImpl = assignImpl;
-;
-function getAssign(root) {
-    return root.Object.assign || assignImpl;
-}
-exports.getAssign = getAssign;
-exports.assign = getAssign(root_1.root);
-
-},{"./root":454}],443:[function(require,module,exports){
+},{}],244:[function(require,module,exports){
 "use strict";
 // typeof any so that it we don't have to cast when comparing a result to the error object
 exports.errorObject = { e: {} };
 
-},{}],444:[function(require,module,exports){
+},{}],245:[function(require,module,exports){
+"use strict";
+function identity(x) {
+    return x;
+}
+exports.identity = identity;
+
+},{}],246:[function(require,module,exports){
 "use strict";
 exports.isArray = Array.isArray || (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],445:[function(require,module,exports){
+},{}],247:[function(require,module,exports){
 "use strict";
 exports.isArrayLike = (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],446:[function(require,module,exports){
+},{}],248:[function(require,module,exports){
 "use strict";
 function isDate(value) {
     return value instanceof Date && !isNaN(+value);
 }
 exports.isDate = isDate;
 
-},{}],447:[function(require,module,exports){
+},{}],249:[function(require,module,exports){
 "use strict";
 function isFunction(x) {
     return typeof x === 'function';
 }
 exports.isFunction = isFunction;
 
-},{}],448:[function(require,module,exports){
+},{}],250:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('../util/isArray');
 function isNumeric(val) {
@@ -35106,34 +27256,34 @@ function isNumeric(val) {
 exports.isNumeric = isNumeric;
 ;
 
-},{"../util/isArray":444}],449:[function(require,module,exports){
+},{"../util/isArray":246}],251:[function(require,module,exports){
 "use strict";
 function isObject(x) {
     return x != null && typeof x === 'object';
 }
 exports.isObject = isObject;
 
-},{}],450:[function(require,module,exports){
+},{}],252:[function(require,module,exports){
 "use strict";
 function isPromise(value) {
     return value && typeof value.subscribe !== 'function' && typeof value.then === 'function';
 }
 exports.isPromise = isPromise;
 
-},{}],451:[function(require,module,exports){
+},{}],253:[function(require,module,exports){
 "use strict";
 function isScheduler(value) {
     return value && typeof value.schedule === 'function';
 }
 exports.isScheduler = isScheduler;
 
-},{}],452:[function(require,module,exports){
+},{}],254:[function(require,module,exports){
 "use strict";
 /* tslint:disable:no-empty */
 function noop() { }
 exports.noop = noop;
 
-},{}],453:[function(require,module,exports){
+},{}],255:[function(require,module,exports){
 "use strict";
 function not(pred, thisArg) {
     function notPred() {
@@ -35145,7 +27295,33 @@ function not(pred, thisArg) {
 }
 exports.not = not;
 
-},{}],454:[function(require,module,exports){
+},{}],256:[function(require,module,exports){
+"use strict";
+var noop_1 = require('./noop');
+/* tslint:enable:max-line-length */
+function pipe() {
+    var fns = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        fns[_i - 0] = arguments[_i];
+    }
+    return pipeFromArray(fns);
+}
+exports.pipe = pipe;
+/* @internal */
+function pipeFromArray(fns) {
+    if (!fns) {
+        return noop_1.noop;
+    }
+    if (fns.length === 1) {
+        return fns[0];
+    }
+    return function piped(input) {
+        return fns.reduce(function (prev, fn) { return fn(prev); }, input);
+    };
+}
+exports.pipeFromArray = pipeFromArray;
+
+},{"./noop":254}],257:[function(require,module,exports){
 (function (global){
 "use strict";
 // CommonJS / Node have global context exposed as "global" variable.
@@ -35167,7 +27343,7 @@ exports.root = _root;
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],455:[function(require,module,exports){
+},{}],258:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var isArrayLike_1 = require('./isArrayLike');
@@ -35189,6 +27365,7 @@ function subscribeToResult(outerSubscriber, result, outerValue, outerIndex) {
             return null;
         }
         else {
+            destination.syncErrorThrowable = true;
             return result.subscribe(destination);
         }
     }
@@ -35246,7 +27423,7 @@ function subscribeToResult(outerSubscriber, result, outerValue, outerIndex) {
 }
 exports.subscribeToResult = subscribeToResult;
 
-},{"../InnerSubscriber":112,"../Observable":114,"../symbol/iterator":422,"../symbol/observable":423,"./isArrayLike":445,"./isObject":449,"./isPromise":450,"./root":454}],456:[function(require,module,exports){
+},{"../InnerSubscriber":88,"../Observable":90,"../symbol/iterator":232,"../symbol/observable":233,"./isArrayLike":247,"./isObject":251,"./isPromise":252,"./root":257}],259:[function(require,module,exports){
 "use strict";
 var Subscriber_1 = require('../Subscriber');
 var rxSubscriber_1 = require('../symbol/rxSubscriber');
@@ -35267,7 +27444,7 @@ function toSubscriber(nextOrObserver, error, complete) {
 }
 exports.toSubscriber = toSubscriber;
 
-},{"../Observer":115,"../Subscriber":122,"../symbol/rxSubscriber":424}],457:[function(require,module,exports){
+},{"../Observer":91,"../Subscriber":97,"../symbol/rxSubscriber":234}],260:[function(require,module,exports){
 "use strict";
 var errorObject_1 = require('./errorObject');
 var tryCatchTarget;
@@ -35287,4 +27464,4 @@ function tryCatch(fn) {
 exports.tryCatch = tryCatch;
 ;
 
-},{"./errorObject":443}]},{},[32]);
+},{"./errorObject":244}]},{},[5]);
