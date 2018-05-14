@@ -72,14 +72,12 @@ var typeResolvers = [
 ];
 
 /**
- * Delivery client configuration object
+ * Init delivery client
  */
-var config = new kc.DeliveryClientConfig(projectId, typeResolvers);
-
-/**
- * Create new instance of Delivery Client and use it to fetch data from Kentico Cloud
- */
-var deliveryClient = new kc.DeliveryClient(config);
+var deliveryClient = new kc.DeliveryClient({
+    projectId: projectId, 
+    typeResolvers: typeResolvers
+});
 
 /**
  * Fetch all items of 'movie' type and given parameters from Kentico Cloud
@@ -89,14 +87,14 @@ deliveryClient.items()
     .limitParameter(10)
     .orderParameter('system.codename', kc.SortOrder.desc)
     .depthParameter(5)
-    .get()
+    .getObservable()
     .subscribe(response => console.log(response));
 
 /**
  * Fetch single item with given codename from Kentico cloud
  */
 deliveryClient.item('tom_hardy')
-    .get()
+    .getObservable()
     .subscribe(response => {
         console.log(response);
         console.log(`The URL of actor '${response.item.system.name}' resolved to: '${response.item.url.getUrl()}'`);
@@ -107,14 +105,14 @@ deliveryClient.item('tom_hardy')
  */
 deliveryClient.types()
     .limitParameter(2)
-    .get()
+    .getObservable()
     .subscribe(response => console.log(response));
 
 /**
  * Fetch taxonomies
  */
 deliveryClient.taxonomies()
-    .get()
+    .getObservable()
     .subscribe(response => console.log(response));
 
 /**
@@ -133,14 +131,13 @@ console.log(`Following is an URL of items query: ${itemsUrl}`);
  * Debug information containing the raw Ajax response
  */
 deliveryClient.items()
-    .get()
+    .getObservable()
     .subscribe(response => console.log(response.debug));
 
 /**
- * Use with Promises
+ * Use with Promise
  */
 deliveryClient.items()
-    .get()
-    .toPromise()
+    .getPromise()
     .then(response => console.log(`Item '${response.firstItem.system.codename}' was fetched using a Promise`));
 
