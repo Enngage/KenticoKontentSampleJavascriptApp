@@ -10,6 +10,7 @@
     "Kentico",
     "Kentico Javascript",
     "Kentico js",
+    "Kentico Browserify",
     "Kentico Cloud",
     "Kentico Cloud SDK",
     "Kentico Cloud Javascript",
@@ -20,7 +21,7 @@
   "private": true,
   "dependencies": {
     "http-server": "0.10.0",
-    "kentico-cloud-delivery-typescript-sdk": "4.0.0-beta.7",
+    "kentico-cloud-delivery": "4.0.0",
     "opn": "5.1.0",
     "rxjs": "6.1.0"
   },

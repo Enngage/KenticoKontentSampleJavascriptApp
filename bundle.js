@@ -6265,9 +6265,9 @@ function hasOwnProperty(obj, prop) {
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./support/isBuffer":30,"_process":11,"inherits":29}],32:[function(require,module,exports){
-/* For in-depth documentation about the use of this SDK visit https://github.com/Enngage/KenticoCloudDeliveryTypeScriptSDK **/
+/* For in-depth documentation about the use of this SDK visit https://github.com/Enngage/kentico-cloud-js **/
 
-var kc = require('kentico-cloud-delivery-typescript-sdk');
+var kc = require('kentico-cloud-delivery');
 var projectId = 'da5abe9f-fdad-4168-97cd-b3464be2ccb9';
 
 /**
@@ -6409,7 +6409,7 @@ deliveryClient.items()
     .then(response => console.log(`Item '${response.firstItem.system.codename}' was fetched using a Promise`));
 
 
-},{"kentico-cloud-delivery-typescript-sdk":66}],33:[function(require,module,exports){
+},{"kentico-cloud-delivery":66}],33:[function(require,module,exports){
 module.exports = require('./lib/axios');
 },{"./lib/axios":35}],34:[function(require,module,exports){
 (function (process){
@@ -10999,8 +10999,8 @@ exports.urlSlugResolver = new UrlSlugResolver();
 exports.__esModule = true;
 exports.sdkInfo = {
     host: 'npmjs.com',
-    version: '4.0.0-beta.7',
-    name: 'kentico-cloud-delivery-typescript-sdk'
+    version: '4.0.0',
+    name: 'kentico-cloud-delivery'
 };
 
 },{}],122:[function(require,module,exports){

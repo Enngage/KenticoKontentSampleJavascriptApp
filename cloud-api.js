@@ -1,6 +1,6 @@
-/* For in-depth documentation about the use of this SDK visit https://github.com/Enngage/KenticoCloudDeliveryTypeScriptSDK **/
+/* For in-depth documentation about the use of this SDK visit https://github.com/Enngage/kentico-cloud-js **/
 
-var kc = require('kentico-cloud-delivery-typescript-sdk');
+var kc = require('kentico-cloud-delivery');
 var projectId = 'da5abe9f-fdad-4168-97cd-b3464be2ccb9';
 
 /**
