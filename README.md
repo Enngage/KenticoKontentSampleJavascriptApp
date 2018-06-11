@@ -36,3 +36,6 @@ npm i browserify -g
 ```
 
 Note: If you don't see any changes after refreshing your browser, use **CTRL + F5** to flush the browser's cache.
+
+[![Analytics](https://ga-beacon.appspot.com/UA-69014260-4/Enngage/KenticoCloudSampleJavascriptApp?pixel)](https://github.com/igrigorik/ga-beacon)
+
